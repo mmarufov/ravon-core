@@ -1,6 +1,6 @@
-
 import Foundation
 
+@MainActor
 public final class SupabaseService {
     public static let shared = SupabaseService()
 
