@@ -6,40 +6,76 @@ public enum OrderStatus: String, Codable, CaseIterable, Sendable {
     case preparing
     case ready
     case assigned
+    case courierArrivedRestaurant = "courier_arrived_restaurant"
+    case pickedUp = "picked_up"
     case delivering
+    case courierArrivedCustomer = "courier_arrived_customer"
     case delivered
     case cancelled
+    case rejected
+    case cancelledByCustomer = "cancelled_by_customer"
+    case cancelledByRestaurant = "cancelled_by_restaurant"
+    case cancelledBySystem = "cancelled_by_system"
 
     public var displayName: String {
         switch self {
-        case .created:    return "Создан"
-        case .accepted:   return "Принят"
-        case .preparing:  return "Готовится"
-        case .ready:      return "Готов"
-        case .assigned:   return "Назначен курьер"
-        case .delivering: return "В пути"
-        case .delivered:  return "Доставлен"
-        case .cancelled:  return "Отменён"
+        case .created:                  return "Создан"
+        case .accepted:                 return "Принят"
+        case .preparing:                return "Готовится"
+        case .ready:                    return "Готов"
+        case .assigned:                 return "Назначен курьер"
+        case .courierArrivedRestaurant: return "Курьер у ресторана"
+        case .pickedUp:                 return "Забран курьером"
+        case .delivering:               return "В пути"
+        case .courierArrivedCustomer:   return "Курьер у клиента"
+        case .delivered:                return "Доставлен"
+        case .cancelled:                return "Отменён"
+        case .rejected:                 return "Отклонён"
+        case .cancelledByCustomer:      return "Отменён клиентом"
+        case .cancelledByRestaurant:    return "Отменён рестораном"
+        case .cancelledBySystem:        return "Отменён системой"
         }
     }
 
     public var isActive: Bool {
+        !isTerminal
+    }
+
+    public var isTerminal: Bool {
         switch self {
-        case .delivered, .cancelled: return false
-        default: return true
+        case .delivered, .cancelled, .rejected,
+             .cancelledByCustomer, .cancelledByRestaurant, .cancelledBySystem:
+            return true
+        default:
+            return false
+        }
+    }
+
+    public var isCancelled: Bool {
+        switch self {
+        case .cancelled, .cancelledByCustomer, .cancelledByRestaurant, .cancelledBySystem:
+            return true
+        default:
+            return false
         }
     }
 
     public var stepIndex: Int {
         switch self {
-        case .created:    return 0
-        case .accepted:   return 1
-        case .preparing:  return 2
-        case .ready:      return 3
-        case .assigned:   return 4
-        case .delivering: return 5
-        case .delivered:  return 6
-        case .cancelled:  return -1
+        case .created:                  return 0
+        case .accepted:                 return 1
+        case .preparing:                return 2
+        case .ready:                    return 3
+        case .assigned:                 return 4
+        case .courierArrivedRestaurant: return 5
+        case .pickedUp:                 return 6
+        case .delivering:               return 7
+        case .courierArrivedCustomer:   return 8
+        case .delivered:                return 9
+        case .cancelled, .cancelledByCustomer,
+             .cancelledByRestaurant, .cancelledBySystem:
+            return -1
+        case .rejected:                 return -1
         }
     }
 }
@@ -60,8 +96,30 @@ public struct Order: Codable, Identifiable, Sendable {
     public let updatedAt: Date
     public let restaurant: Restaurant?
     public let orderItems: [OrderItem]?
+    public let estimatedDeliveryTime: Date?
+    public let estimatedPrepTime: Int?
+    public let cancellationReason: String?
+    public let cancelledBy: UUID?
+    public let verificationCode: String?
+    public let tipAmount: Double?
+    public let pickedUpAt: Date?
+    public let deliveredAt: Date?
+    public let acceptedAt: Date?
+    public let rejectedAt: Date?
 
-    public init(id: UUID, userId: UUID, restaurantId: UUID, addressId: UUID? = nil, courierId: UUID? = nil, status: OrderStatus, subtotal: Double, deliveryFee: Double, total: Double, deliveryAddressSnapshot: AddressSnapshot? = nil, notes: String? = nil, createdAt: Date, updatedAt: Date, restaurant: Restaurant? = nil, orderItems: [OrderItem]? = nil) {
+    public init(
+        id: UUID, userId: UUID, restaurantId: UUID,
+        addressId: UUID? = nil, courierId: UUID? = nil,
+        status: OrderStatus, subtotal: Double, deliveryFee: Double, total: Double,
+        deliveryAddressSnapshot: AddressSnapshot? = nil, notes: String? = nil,
+        createdAt: Date, updatedAt: Date,
+        restaurant: Restaurant? = nil, orderItems: [OrderItem]? = nil,
+        estimatedDeliveryTime: Date? = nil, estimatedPrepTime: Int? = nil,
+        cancellationReason: String? = nil, cancelledBy: UUID? = nil,
+        verificationCode: String? = nil, tipAmount: Double? = nil,
+        pickedUpAt: Date? = nil, deliveredAt: Date? = nil,
+        acceptedAt: Date? = nil, rejectedAt: Date? = nil
+    ) {
         self.id = id
         self.userId = userId
         self.restaurantId = restaurantId
@@ -77,6 +135,16 @@ public struct Order: Codable, Identifiable, Sendable {
         self.updatedAt = updatedAt
         self.restaurant = restaurant
         self.orderItems = orderItems
+        self.estimatedDeliveryTime = estimatedDeliveryTime
+        self.estimatedPrepTime = estimatedPrepTime
+        self.cancellationReason = cancellationReason
+        self.cancelledBy = cancelledBy
+        self.verificationCode = verificationCode
+        self.tipAmount = tipAmount
+        self.pickedUpAt = pickedUpAt
+        self.deliveredAt = deliveredAt
+        self.acceptedAt = acceptedAt
+        self.rejectedAt = rejectedAt
     }
 
     enum CodingKeys: String, CodingKey {
@@ -94,6 +162,16 @@ public struct Order: Codable, Identifiable, Sendable {
         case updatedAt = "updated_at"
         case restaurant = "restaurants"
         case orderItems = "order_items"
+        case estimatedDeliveryTime = "estimated_delivery_time"
+        case estimatedPrepTime = "estimated_prep_time"
+        case cancellationReason = "cancellation_reason"
+        case cancelledBy = "cancelled_by"
+        case verificationCode = "verification_code"
+        case tipAmount = "tip_amount"
+        case pickedUpAt = "picked_up_at"
+        case deliveredAt = "delivered_at"
+        case acceptedAt = "accepted_at"
+        case rejectedAt = "rejected_at"
     }
 }
 

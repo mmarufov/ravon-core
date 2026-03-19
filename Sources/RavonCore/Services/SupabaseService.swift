@@ -4,11 +4,19 @@ import Supabase
 public enum ServiceError: LocalizedError, Sendable {
     case notAuthenticated
     case invalidResponse
+    case orderNotFound
+    case invalidStatusTransition
+    case unauthorized
+    case invalidVerificationCode
 
     public var errorDescription: String? {
         switch self {
-        case .notAuthenticated: return "Пользователь не авторизован"
-        case .invalidResponse: return "Ошибка ответа сервера"
+        case .notAuthenticated:        return "Пользователь не авторизован"
+        case .invalidResponse:         return "Ошибка ответа сервера"
+        case .orderNotFound:           return "Заказ не найден"
+        case .invalidStatusTransition: return "Недопустимый переход статуса"
+        case .unauthorized:            return "Недостаточно прав"
+        case .invalidVerificationCode: return "Неверный код подтверждения"
         }
     }
 }
@@ -209,5 +217,123 @@ public final class SupabaseService {
             throw ServiceError.invalidResponse
         }
         return uuid
+    }
+
+    // MARK: - Order Lifecycle (Merchant)
+
+    public func acceptOrder(orderId: UUID, estimatedPrepMinutes: Int) async throws {
+        try await client.from("orders")
+            .update([
+                "status": AnyJSON.string(OrderStatus.accepted.rawValue),
+                "estimated_prep_time": AnyJSON.integer(estimatedPrepMinutes),
+                "accepted_at": AnyJSON.string(ISO8601DateFormatter().string(from: Date())),
+            ])
+            .eq("id", value: orderId.uuidString)
+            .execute()
+    }
+
+    public func rejectOrder(orderId: UUID, reason: String) async throws {
+        guard let uid = AuthService.shared.userId else {
+            throw ServiceError.notAuthenticated
+        }
+        try await client.from("orders")
+            .update([
+                "status": AnyJSON.string(OrderStatus.rejected.rawValue),
+                "cancellation_reason": AnyJSON.string(reason),
+                "cancelled_by": AnyJSON.string(uid.uuidString),
+                "rejected_at": AnyJSON.string(ISO8601DateFormatter().string(from: Date())),
+            ])
+            .eq("id", value: orderId.uuidString)
+            .execute()
+    }
+
+    public func markOrderReady(orderId: UUID) async throws {
+        try await client.from("orders")
+            .update(["status": AnyJSON.string(OrderStatus.ready.rawValue)])
+            .eq("id", value: orderId.uuidString)
+            .execute()
+    }
+
+    // MARK: - Order Lifecycle (Courier)
+
+    public func courierArrivedAtRestaurant(orderId: UUID) async throws {
+        try await client.from("orders")
+            .update(["status": AnyJSON.string(OrderStatus.courierArrivedRestaurant.rawValue)])
+            .eq("id", value: orderId.uuidString)
+            .execute()
+    }
+
+    public func pickUpOrder(orderId: UUID, verificationCode: String) async throws {
+        let order: Order = try await client.from("orders")
+            .select("*")
+            .eq("id", value: orderId.uuidString)
+            .single()
+            .execute()
+            .value
+        guard order.verificationCode == verificationCode else {
+            throw ServiceError.invalidVerificationCode
+        }
+        try await client.from("orders")
+            .update([
+                "status": AnyJSON.string(OrderStatus.pickedUp.rawValue),
+                "picked_up_at": AnyJSON.string(ISO8601DateFormatter().string(from: Date())),
+            ])
+            .eq("id", value: orderId.uuidString)
+            .execute()
+    }
+
+    public func courierArrivedAtCustomer(orderId: UUID) async throws {
+        try await client.from("orders")
+            .update(["status": AnyJSON.string(OrderStatus.courierArrivedCustomer.rawValue)])
+            .eq("id", value: orderId.uuidString)
+            .execute()
+    }
+
+    public func deliverOrder(orderId: UUID) async throws {
+        try await client.from("orders")
+            .update([
+                "status": AnyJSON.string(OrderStatus.delivered.rawValue),
+                "delivered_at": AnyJSON.string(ISO8601DateFormatter().string(from: Date())),
+            ])
+            .eq("id", value: orderId.uuidString)
+            .execute()
+    }
+
+    // MARK: - Order Lifecycle (Consumer)
+
+    public func cancelOrder(orderId: UUID, reason: String?) async throws {
+        guard let uid = AuthService.shared.userId else {
+            throw ServiceError.notAuthenticated
+        }
+        var updates: [String: AnyJSON] = [
+            "status": .string(OrderStatus.cancelledByCustomer.rawValue),
+            "cancelled_by": .string(uid.uuidString),
+        ]
+        if let reason {
+            updates["cancellation_reason"] = .string(reason)
+        }
+        try await client.from("orders")
+            .update(updates)
+            .eq("id", value: orderId.uuidString)
+            .execute()
+    }
+
+    // MARK: - Order Lifecycle (Shared)
+
+    public func assignCourier(orderId: UUID, courierId: UUID) async throws {
+        try await client.from("orders")
+            .update([
+                "status": AnyJSON.string(OrderStatus.assigned.rawValue),
+                "courier_id": AnyJSON.string(courierId.uuidString),
+            ])
+            .eq("id", value: orderId.uuidString)
+            .execute()
+    }
+
+    public func addTip(orderId: UUID, amount: Double) async throws {
+        try await client.from("orders")
+            .update(["tip_amount": AnyJSON.double(amount)])
+            .eq("id", value: orderId.uuidString)
+            .execute()
     }
 }
