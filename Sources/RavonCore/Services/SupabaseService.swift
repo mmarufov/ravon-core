@@ -8,6 +8,7 @@ public enum ServiceError: LocalizedError, Sendable {
     case invalidStatusTransition
     case unauthorized
     case invalidVerificationCode
+    case orderAlreadyClaimed
 
     public var errorDescription: String? {
         switch self {
@@ -17,6 +18,7 @@ public enum ServiceError: LocalizedError, Sendable {
         case .invalidStatusTransition: return "Недопустимый переход статуса"
         case .unauthorized:            return "Недостаточно прав"
         case .invalidVerificationCode: return "Неверный код подтверждения"
+        case .orderAlreadyClaimed:     return "Заказ уже занят другим курьером"
         }
     }
 }
@@ -335,5 +337,174 @@ public final class SupabaseService {
             .update(["tip_amount": AnyJSON.double(amount)])
             .eq("id", value: orderId.uuidString)
             .execute()
+    }
+
+    // MARK: - Courier Location
+
+    public func updateCourierLocation(
+        latitude: Double,
+        longitude: Double,
+        heading: Double?,
+        speed: Double?
+    ) async throws {
+        guard let uid = AuthService.shared.userId else {
+            throw ServiceError.notAuthenticated
+        }
+        let upsert = CourierLocationUpsert(
+            courierId: uid,
+            latitude: latitude,
+            longitude: longitude,
+            heading: heading,
+            speed: speed,
+            isOnline: true
+        )
+        try await client.from("courier_locations")
+            .upsert(upsert, onConflict: "courier_id")
+            .execute()
+    }
+
+    public func fetchCourierLocation(courierId: UUID) async throws -> CourierLocation {
+        try await client.from("courier_locations")
+            .select()
+            .eq("courier_id", value: courierId.uuidString)
+            .single()
+            .execute()
+            .value
+    }
+
+    public func fetchNearbyCouriers(
+        latitude: Double,
+        longitude: Double,
+        radiusKm: Double = 5.0
+    ) async throws -> [NearbyCourier] {
+        struct Params: Encodable {
+            let p_latitude: Double
+            let p_longitude: Double
+            let p_radius_km: Double
+        }
+        return try await client.rpc("find_nearby_couriers", params: Params(
+            p_latitude: latitude,
+            p_longitude: longitude,
+            p_radius_km: radiusKm
+        )).execute().value
+    }
+
+    // MARK: - Courier Status
+
+    public func goOnline(latitude: Double, longitude: Double) async throws {
+        guard let uid = AuthService.shared.userId else {
+            throw ServiceError.notAuthenticated
+        }
+        let upsert = CourierLocationUpsert(
+            courierId: uid,
+            latitude: latitude,
+            longitude: longitude,
+            isOnline: true
+        )
+        try await client.from("courier_locations")
+            .upsert(upsert, onConflict: "courier_id")
+            .execute()
+    }
+
+    public func goOffline() async throws {
+        guard let uid = AuthService.shared.userId else {
+            throw ServiceError.notAuthenticated
+        }
+        try await client.from("courier_locations")
+            .update(["is_online": AnyJSON.bool(false)])
+            .eq("courier_id", value: uid.uuidString)
+            .execute()
+    }
+
+    public func fetchCourierStatus() async throws -> CourierLocation {
+        guard let uid = AuthService.shared.userId else {
+            throw ServiceError.notAuthenticated
+        }
+        return try await client.from("courier_locations")
+            .select()
+            .eq("courier_id", value: uid.uuidString)
+            .single()
+            .execute()
+            .value
+    }
+
+    // MARK: - Courier Claiming
+
+    public func claimOrder(orderId: UUID) async throws -> UUID {
+        struct Params: Encodable {
+            let p_order_id: UUID
+        }
+        let result: String = try await client.rpc("claim_order", params: Params(
+            p_order_id: orderId
+        )).execute().value
+        guard let uuid = UUID(uuidString: result) else {
+            throw ServiceError.invalidResponse
+        }
+        return uuid
+    }
+
+    public func fetchAvailableOrders(
+        latitude: Double,
+        longitude: Double,
+        radiusKm: Double = 10.0
+    ) async throws -> [Order] {
+        struct Params: Encodable {
+            let p_latitude: Double
+            let p_longitude: Double
+            let p_radius_km: Double
+        }
+        return try await client.rpc("fetch_available_orders", params: Params(
+            p_latitude: latitude,
+            p_longitude: longitude,
+            p_radius_km: radiusKm
+        )).execute().value
+    }
+
+    // MARK: - Courier Earnings
+
+    public enum EarningsPeriod: Sendable {
+        case today
+        case week
+        case month
+        case all
+    }
+
+    public func fetchEarnings(period: EarningsPeriod) async throws -> [CourierEarning] {
+        guard let uid = AuthService.shared.userId else {
+            throw ServiceError.notAuthenticated
+        }
+        var query = client.from("courier_earnings")
+            .select()
+            .eq("courier_id", value: uid.uuidString)
+
+        let formatter = ISO8601DateFormatter()
+        switch period {
+        case .today:
+            let startOfDay = Calendar.current.startOfDay(for: Date())
+            query = query.gte("created_at", value: formatter.string(from: startOfDay))
+        case .week:
+            let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
+            query = query.gte("created_at", value: formatter.string(from: weekAgo))
+        case .month:
+            let monthAgo = Calendar.current.date(byAdding: .month, value: -1, to: Date())!
+            query = query.gte("created_at", value: formatter.string(from: monthAgo))
+        case .all:
+            break
+        }
+
+        return try await query
+            .order("created_at", ascending: false)
+            .execute()
+            .value
+    }
+
+    public func fetchEarningsSummary(period: EarningsPeriod) async throws -> EarningsSummary {
+        let earnings = try await fetchEarnings(period: period)
+        return EarningsSummary(
+            totalDeliveries: earnings.count,
+            totalDeliveryFees: earnings.reduce(0) { $0 + $1.deliveryFee },
+            totalTips: earnings.reduce(0) { $0 + $1.tipAmount },
+            totalEarned: earnings.reduce(0) { $0 + $1.totalEarned }
+        )
     }
 }

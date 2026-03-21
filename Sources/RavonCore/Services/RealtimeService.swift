@@ -15,6 +15,22 @@ public struct OrderChangeEvent: Sendable {
     }
 }
 
+public struct CourierLocationEvent: Sendable {
+    public let courierId: UUID
+    public let latitude: Double
+    public let longitude: Double
+    public let heading: Double?
+    public let speed: Double?
+
+    public init(courierId: UUID, latitude: Double, longitude: Double, heading: Double?, speed: Double?) {
+        self.courierId = courierId
+        self.latitude = latitude
+        self.longitude = longitude
+        self.heading = heading
+        self.speed = speed
+    }
+}
+
 public struct MenuItemChangeEvent: Sendable {
     public let menuItemId: UUID
     public let restaurantId: UUID
@@ -35,11 +51,14 @@ public final class RealtimeService: ObservableObject {
 
     private var orderChannel: RealtimeChannelV2?
     private var menuChannel: RealtimeChannelV2?
+    private var courierLocationChannel: RealtimeChannelV2?
     private var orderTask: Task<Void, Never>?
     private var menuTask: Task<Void, Never>?
+    private var courierLocationTask: Task<Void, Never>?
 
     @Published public private(set) var lastOrderChange: OrderChangeEvent?
     @Published public private(set) var lastMenuItemChange: MenuItemChangeEvent?
+    @Published public private(set) var lastCourierLocationChange: CourierLocationEvent?
 
     public init() {}
 
@@ -206,7 +225,57 @@ public final class RealtimeService: ObservableObject {
         }
     }
 
+    // MARK: - Courier Location Subscriptions
+
+    /// Subscribe to a courier's location updates (consumer tracking delivery on map)
+    public func subscribeToCourierLocation(courierId: UUID) async throws {
+        await unsubscribeFromCourierLocation()
+        let channel = client.channel("courier-location-\(courierId.uuidString)")
+        let changes = channel.postgresChange(
+            UpdateAction.self,
+            schema: "public",
+            table: "courier_locations",
+            filter: .eq("courier_id", value: courierId)
+        )
+        try await channel.subscribeWithError()
+        courierLocationChannel = channel
+
+        courierLocationTask = Task { [weak self] in
+            for await change in changes {
+                guard let self, !Task.isCancelled else { return }
+                let lat = change.record["latitude"]
+                    .flatMap({ if case .double(let d) = $0 { return d } else { return nil } })
+                let lng = change.record["longitude"]
+                    .flatMap({ if case .double(let d) = $0 { return d } else { return nil } })
+                let heading = change.record["heading"]
+                    .flatMap({ if case .double(let d) = $0 { return d } else { return nil } })
+                let speed = change.record["speed"]
+                    .flatMap({ if case .double(let d) = $0 { return d } else { return nil } })
+                if let lat, let lng {
+                    await MainActor.run {
+                        self.lastCourierLocationChange = CourierLocationEvent(
+                            courierId: courierId,
+                            latitude: lat,
+                            longitude: lng,
+                            heading: heading,
+                            speed: speed
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Unsubscribe
+
+    public func unsubscribeFromCourierLocation() async {
+        courierLocationTask?.cancel()
+        courierLocationTask = nil
+        if let channel = courierLocationChannel {
+            await client.removeChannel(channel)
+            courierLocationChannel = nil
+        }
+    }
 
     public func unsubscribeFromOrders() async {
         orderTask?.cancel()
@@ -229,5 +298,6 @@ public final class RealtimeService: ObservableObject {
     public func unsubscribeAll() async {
         await unsubscribeFromOrders()
         await unsubscribeFromMenu()
+        await unsubscribeFromCourierLocation()
     }
 }

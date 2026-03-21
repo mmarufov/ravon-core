@@ -12,8 +12,18 @@ public struct Restaurant: Codable, Identifiable, Hashable, Sendable {
     public let minOrderAmount: Double
     public let isActive: Bool
     public let address: String?
+    public let latitude: Double?
+    public let longitude: Double?
+    public let openingTime: String?
+    public let closingTime: String?
 
-    public init(id: UUID, name: String, description: String? = nil, imageUrl: String? = nil, cuisineType: String, rating: Double, deliveryTimeMin: Int, deliveryFee: Double, minOrderAmount: Double, isActive: Bool, address: String? = nil) {
+    public init(
+        id: UUID, name: String, description: String? = nil, imageUrl: String? = nil,
+        cuisineType: String, rating: Double, deliveryTimeMin: Int,
+        deliveryFee: Double, minOrderAmount: Double, isActive: Bool,
+        address: String? = nil, latitude: Double? = nil, longitude: Double? = nil,
+        openingTime: String? = nil, closingTime: String? = nil
+    ) {
         self.id = id
         self.name = name
         self.description = description
@@ -25,6 +35,10 @@ public struct Restaurant: Codable, Identifiable, Hashable, Sendable {
         self.minOrderAmount = minOrderAmount
         self.isActive = isActive
         self.address = address
+        self.latitude = latitude
+        self.longitude = longitude
+        self.openingTime = openingTime
+        self.closingTime = closingTime
     }
 
     enum CodingKeys: String, CodingKey {
@@ -36,6 +50,8 @@ public struct Restaurant: Codable, Identifiable, Hashable, Sendable {
         case deliveryFee = "delivery_fee"
         case minOrderAmount = "min_order_amount"
         case isActive = "is_active"
-        case address
+        case address, latitude, longitude
+        case openingTime = "opening_time"
+        case closingTime = "closing_time"
     }
 }
