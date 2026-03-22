@@ -10,8 +10,9 @@ public struct MenuItem: Codable, Identifiable, Hashable, Sendable {
     public let imageUrl: String?
     public let isAvailable: Bool
     public let sortOrder: Int
+    public let stockCount: Int?
 
-    public init(id: UUID, categoryId: UUID, restaurantId: UUID, name: String, description: String? = nil, price: Double, imageUrl: String? = nil, isAvailable: Bool, sortOrder: Int) {
+    public init(id: UUID, categoryId: UUID, restaurantId: UUID, name: String, description: String? = nil, price: Double, imageUrl: String? = nil, isAvailable: Bool, sortOrder: Int, stockCount: Int? = nil) {
         self.id = id
         self.categoryId = categoryId
         self.restaurantId = restaurantId
@@ -21,6 +22,7 @@ public struct MenuItem: Codable, Identifiable, Hashable, Sendable {
         self.imageUrl = imageUrl
         self.isAvailable = isAvailable
         self.sortOrder = sortOrder
+        self.stockCount = stockCount
     }
 
     enum CodingKeys: String, CodingKey {
@@ -31,5 +33,6 @@ public struct MenuItem: Codable, Identifiable, Hashable, Sendable {
         case imageUrl = "image_url"
         case isAvailable = "is_available"
         case sortOrder = "sort_order"
+        case stockCount = "stock_count"
     }
 }

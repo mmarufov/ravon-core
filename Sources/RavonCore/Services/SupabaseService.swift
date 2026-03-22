@@ -9,6 +9,10 @@ public enum ServiceError: LocalizedError, Sendable {
     case unauthorized
     case invalidVerificationCode
     case orderAlreadyClaimed
+    case restaurantClosed
+    case restaurantNotAccepting
+    case restaurantOverloaded
+    case insufficientStock
 
     public var errorDescription: String? {
         switch self {
@@ -19,6 +23,10 @@ public enum ServiceError: LocalizedError, Sendable {
         case .unauthorized:            return "Недостаточно прав"
         case .invalidVerificationCode: return "Неверный код подтверждения"
         case .orderAlreadyClaimed:     return "Заказ уже занят другим курьером"
+        case .restaurantClosed:        return "Ресторан сейчас закрыт"
+        case .restaurantNotAccepting:  return "Ресторан не принимает заказы"
+        case .restaurantOverloaded:    return "Ресторан перегружен заказами"
+        case .insufficientStock:       return "Недостаточно товара на складе"
         }
     }
 }
@@ -506,5 +514,158 @@ public final class SupabaseService {
             totalTips: earnings.reduce(0) { $0 + $1.tipAmount },
             totalEarned: earnings.reduce(0) { $0 + $1.totalEarned }
         )
+    }
+
+    // MARK: - Restaurant Hours
+
+    public func fetchRestaurantHours(restaurantId: UUID) async throws -> [RestaurantHours] {
+        try await client.from("restaurant_hours")
+            .select()
+            .eq("restaurant_id", value: restaurantId.uuidString)
+            .order("day_of_week")
+            .execute()
+            .value
+    }
+
+    public func upsertRestaurantHours(_ hours: [RestaurantHoursUpsert]) async throws {
+        try await client.from("restaurant_hours")
+            .upsert(hours, onConflict: "restaurant_id,day_of_week")
+            .execute()
+    }
+
+    public func isRestaurantOpen(restaurantId: UUID) async throws -> Bool {
+        let hours = try await fetchRestaurantHours(restaurantId: restaurantId)
+        guard !hours.isEmpty else { return true } // No hours = always open
+
+        let now = Date()
+        let calendar = Calendar.current
+        // Swift .weekday: 1=Sunday, 2=Monday, ... 7=Saturday
+        // DB convention: 0=Sunday, 1=Monday, ... 6=Saturday
+        let dayOfWeek = calendar.component(.weekday, from: now) - 1
+
+        guard let todayHours = hours.first(where: { $0.dayOfWeek == dayOfWeek }) else {
+            return true // No entry for today = open
+        }
+        if todayHours.isClosed { return false }
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        let currentTimeStr = formatter.string(from: now)
+        return currentTimeStr >= todayHours.openingTime && currentTimeStr <= todayHours.closingTime
+    }
+
+    // MARK: - Modifiers
+
+    /// Fetch modifier groups for a specific menu item (consumer view, via junction table)
+    public func fetchModifierGroups(menuItemId: UUID) async throws -> [ModifierGroup] {
+        let junctions: [MenuItemModifierGroup] = try await client.from("menu_item_modifier_groups")
+            .select()
+            .eq("menu_item_id", value: menuItemId.uuidString)
+            .execute()
+            .value
+        guard !junctions.isEmpty else { return [] }
+        let groupIds = junctions.map { $0.modifierGroupId.uuidString }
+        return try await client.from("modifier_groups")
+            .select("*, modifier_options(*)")
+            .in("id", values: groupIds)
+            .order("sort_order")
+            .execute()
+            .value
+    }
+
+    /// Fetch all modifier groups for a restaurant (merchant management view)
+    public func fetchAllModifierGroups(restaurantId: UUID) async throws -> [ModifierGroup] {
+        try await client.from("modifier_groups")
+            .select("*, modifier_options(*)")
+            .eq("restaurant_id", value: restaurantId.uuidString)
+            .order("sort_order")
+            .execute()
+            .value
+    }
+
+    // MARK: - Merchant Menu Management
+
+    /// Fetch all menu items including unavailable ones (merchant view)
+    public func fetchAllMenuItems(restaurantId: UUID) async throws -> [MenuItem] {
+        try await client.from("menu_items")
+            .select()
+            .eq("restaurant_id", value: restaurantId.uuidString)
+            .order("sort_order")
+            .execute()
+            .value
+    }
+
+    public func toggleMenuItemAvailability(id: UUID, isAvailable: Bool) async throws {
+        try await client.from("menu_items")
+            .update(["is_available": AnyJSON.bool(isAvailable)])
+            .eq("id", value: id.uuidString)
+            .execute()
+    }
+
+    public func updateStock(menuItemId: UUID, count: Int?) async throws {
+        let value: AnyJSON = count.map { AnyJSON.integer($0) } ?? .null
+        try await client.from("menu_items")
+            .update(["stock_count": value])
+            .eq("id", value: menuItemId.uuidString)
+            .execute()
+    }
+
+    public func updateMenuItem(
+        id: UUID,
+        name: String? = nil,
+        description: String? = nil,
+        price: Double? = nil,
+        isAvailable: Bool? = nil,
+        sortOrder: Int? = nil,
+        stockCount: Int? = nil
+    ) async throws {
+        var updates: [String: AnyJSON] = [:]
+        if let name { updates["name"] = .string(name) }
+        if let description { updates["description"] = .string(description) }
+        if let price { updates["price"] = .double(price) }
+        if let isAvailable { updates["is_available"] = .bool(isAvailable) }
+        if let sortOrder { updates["sort_order"] = .integer(sortOrder) }
+        if let stockCount { updates["stock_count"] = .integer(stockCount) }
+        guard !updates.isEmpty else { return }
+        try await client.from("menu_items")
+            .update(updates)
+            .eq("id", value: id.uuidString)
+            .execute()
+    }
+
+    // MARK: - Merchant Restaurant Management
+
+    public func updateRestaurant(
+        id: UUID,
+        name: String? = nil,
+        description: String? = nil,
+        address: String? = nil,
+        cuisineType: String? = nil,
+        deliveryFee: Double? = nil,
+        minOrderAmount: Double? = nil,
+        deliveryTimeMin: Int? = nil,
+        maxConcurrentOrders: Int? = nil
+    ) async throws {
+        var updates: [String: AnyJSON] = [:]
+        if let name { updates["name"] = .string(name) }
+        if let description { updates["description"] = .string(description) }
+        if let address { updates["address"] = .string(address) }
+        if let cuisineType { updates["cuisine_type"] = .string(cuisineType) }
+        if let deliveryFee { updates["delivery_fee"] = .double(deliveryFee) }
+        if let minOrderAmount { updates["min_order_amount"] = .double(minOrderAmount) }
+        if let deliveryTimeMin { updates["delivery_time_min"] = .integer(deliveryTimeMin) }
+        if let maxConcurrentOrders { updates["max_concurrent_orders"] = .integer(maxConcurrentOrders) }
+        guard !updates.isEmpty else { return }
+        try await client.from("restaurants")
+            .update(updates)
+            .eq("id", value: id.uuidString)
+            .execute()
+    }
+
+    public func toggleAcceptingOrders(restaurantId: UUID, accepting: Bool) async throws {
+        try await client.from("restaurants")
+            .update(["is_accepting_orders": AnyJSON.bool(accepting)])
+            .eq("id", value: restaurantId.uuidString)
+            .execute()
     }
 }
