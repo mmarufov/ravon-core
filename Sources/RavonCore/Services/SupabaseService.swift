@@ -451,6 +451,18 @@ public final class SupabaseService {
         return uuid
     }
 
+    /// Fetch all available orders without location filter (for testing / fallback)
+    public func fetchAvailableOrders() async throws -> [Order] {
+        try await client.from("orders")
+            .select()
+            .is("courier_id", value: nil)
+            .in("status", values: ["confirmed", "preparing", "ready"])
+            .order("created_at")
+            .execute()
+            .value
+    }
+
+    /// Fetch available orders within radius of courier's location
     public func fetchAvailableOrders(
         latitude: Double,
         longitude: Double,
