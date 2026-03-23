@@ -456,7 +456,7 @@ public final class SupabaseService {
         try await client.from("orders")
             .select()
             .is("courier_id", value: nil)
-            .in("status", values: ["confirmed", "preparing", "ready"])
+            .in("status", values: ["accepted", "preparing", "ready"])
             .order("created_at")
             .execute()
             .value
