@@ -39,6 +39,9 @@ public final class SupabaseService {
 
     public init() {}
 
+    private struct IdRow: Decodable { let id: UUID }
+    private static let isoFormatter = ISO8601DateFormatter()
+
     // MARK: - Profile
 
     public func fetchProfile() async throws -> Profile {
@@ -57,11 +60,12 @@ public final class SupabaseService {
         guard let uid = AuthService.shared.userId else {
             throw ServiceError.notAuthenticated
         }
+        var updates: [String: AnyJSON] = [
+            "full_name": .string(fullName),
+        ]
+        updates["phone"] = phone.map { .string($0) } ?? .null
         try await client.from("profiles")
-            .update([
-                "full_name": fullName,
-                "phone": phone ?? ""
-            ])
+            .update(updates)
             .eq("id", value: uid.uuidString)
             .execute()
     }
@@ -232,81 +236,102 @@ public final class SupabaseService {
     // MARK: - Order Lifecycle (Merchant)
 
     public func acceptOrder(orderId: UUID, estimatedPrepMinutes: Int) async throws {
-        try await client.from("orders")
+        let results: [IdRow] = try await client.from("orders")
             .update([
                 "status": AnyJSON.string(OrderStatus.accepted.rawValue),
                 "estimated_prep_time": AnyJSON.integer(estimatedPrepMinutes),
-                "accepted_at": AnyJSON.string(ISO8601DateFormatter().string(from: Date())),
+                "accepted_at": AnyJSON.string(Self.isoFormatter.string(from: Date())),
             ])
             .eq("id", value: orderId.uuidString)
+            .eq("status", value: OrderStatus.created.rawValue)
+            .select("id")
             .execute()
+            .value
+        guard !results.isEmpty else { throw ServiceError.invalidStatusTransition }
     }
 
     public func rejectOrder(orderId: UUID, reason: String) async throws {
         guard let uid = AuthService.shared.userId else {
             throw ServiceError.notAuthenticated
         }
-        try await client.from("orders")
+        let results: [IdRow] = try await client.from("orders")
             .update([
                 "status": AnyJSON.string(OrderStatus.rejected.rawValue),
                 "cancellation_reason": AnyJSON.string(reason),
                 "cancelled_by": AnyJSON.string(uid.uuidString),
-                "rejected_at": AnyJSON.string(ISO8601DateFormatter().string(from: Date())),
+                "rejected_at": AnyJSON.string(Self.isoFormatter.string(from: Date())),
             ])
             .eq("id", value: orderId.uuidString)
+            .eq("status", value: OrderStatus.created.rawValue)
+            .select("id")
             .execute()
+            .value
+        guard !results.isEmpty else { throw ServiceError.invalidStatusTransition }
     }
 
     public func markOrderReady(orderId: UUID) async throws {
-        try await client.from("orders")
+        let results: [IdRow] = try await client.from("orders")
             .update(["status": AnyJSON.string(OrderStatus.ready.rawValue)])
             .eq("id", value: orderId.uuidString)
+            .in("status", values: [OrderStatus.accepted.rawValue, OrderStatus.preparing.rawValue])
+            .select("id")
             .execute()
+            .value
+        guard !results.isEmpty else { throw ServiceError.invalidStatusTransition }
     }
 
     // MARK: - Order Lifecycle (Courier)
 
     public func courierArrivedAtRestaurant(orderId: UUID) async throws {
-        try await client.from("orders")
+        let results: [IdRow] = try await client.from("orders")
             .update(["status": AnyJSON.string(OrderStatus.courierArrivedRestaurant.rawValue)])
             .eq("id", value: orderId.uuidString)
+            .eq("status", value: OrderStatus.assigned.rawValue)
+            .select("id")
             .execute()
+            .value
+        guard !results.isEmpty else { throw ServiceError.invalidStatusTransition }
     }
 
     public func pickUpOrder(orderId: UUID, verificationCode: String) async throws {
-        let order: Order = try await client.from("orders")
-            .select("*")
-            .eq("id", value: orderId.uuidString)
-            .single()
-            .execute()
-            .value
-        guard order.verificationCode == verificationCode else {
-            throw ServiceError.invalidVerificationCode
-        }
-        try await client.from("orders")
+        // Atomic: verifies code + status in a single UPDATE WHERE
+        let results: [IdRow] = try await client.from("orders")
             .update([
                 "status": AnyJSON.string(OrderStatus.pickedUp.rawValue),
-                "picked_up_at": AnyJSON.string(ISO8601DateFormatter().string(from: Date())),
+                "picked_up_at": AnyJSON.string(Self.isoFormatter.string(from: Date())),
             ])
             .eq("id", value: orderId.uuidString)
+            .eq("status", value: OrderStatus.courierArrivedRestaurant.rawValue)
+            .eq("verification_code", value: verificationCode)
+            .select("id")
             .execute()
+            .value
+        guard !results.isEmpty else { throw ServiceError.invalidVerificationCode }
     }
 
     public func courierArrivedAtCustomer(orderId: UUID) async throws {
-        try await client.from("orders")
+        let results: [IdRow] = try await client.from("orders")
             .update(["status": AnyJSON.string(OrderStatus.courierArrivedCustomer.rawValue)])
             .eq("id", value: orderId.uuidString)
+            .eq("status", value: OrderStatus.delivering.rawValue)
+            .select("id")
             .execute()
+            .value
+        guard !results.isEmpty else { throw ServiceError.invalidStatusTransition }
     }
 
     public func deliverOrder(orderId: UUID) async throws {
-        try await client.from("orders")
+        let results: [IdRow] = try await client.from("orders")
             .update([
                 "status": AnyJSON.string(OrderStatus.delivered.rawValue),
-                "delivered_at": AnyJSON.string(ISO8601DateFormatter().string(from: Date())),
+                "delivered_at": AnyJSON.string(Self.isoFormatter.string(from: Date())),
             ])
             .eq("id", value: orderId.uuidString)
+            .eq("status", value: OrderStatus.courierArrivedCustomer.rawValue)
+            .select("id")
             .execute()
+            .value
+        guard !results.isEmpty else { throw ServiceError.invalidStatusTransition }
     }
 
     // MARK: - Order Lifecycle (Consumer)
@@ -322,22 +347,36 @@ public final class SupabaseService {
         if let reason {
             updates["cancellation_reason"] = .string(reason)
         }
-        try await client.from("orders")
+        let activeStatuses = OrderStatus.allCases.filter(\.isActive).map(\.rawValue)
+        let results: [IdRow] = try await client.from("orders")
             .update(updates)
             .eq("id", value: orderId.uuidString)
+            .in("status", values: activeStatuses)
+            .select("id")
             .execute()
+            .value
+        guard !results.isEmpty else { throw ServiceError.invalidStatusTransition }
     }
 
     // MARK: - Order Lifecycle (Shared)
 
     public func assignCourier(orderId: UUID, courierId: UUID) async throws {
-        try await client.from("orders")
+        let results: [IdRow] = try await client.from("orders")
             .update([
                 "status": AnyJSON.string(OrderStatus.assigned.rawValue),
                 "courier_id": AnyJSON.string(courierId.uuidString),
             ])
             .eq("id", value: orderId.uuidString)
+            .in("status", values: [
+                OrderStatus.accepted.rawValue,
+                OrderStatus.preparing.rawValue,
+                OrderStatus.ready.rawValue,
+            ])
+            .is("courier_id", value: nil)
+            .select("id")
             .execute()
+            .value
+        guard !results.isEmpty else { throw ServiceError.orderAlreadyClaimed }
     }
 
     public func addTip(orderId: UUID, amount: Double) async throws {
@@ -679,5 +718,58 @@ public final class SupabaseService {
             .update(["is_accepting_orders": AnyJSON.bool(accepting)])
             .eq("id", value: restaurantId.uuidString)
             .execute()
+    }
+
+    // MARK: - Chat Messages
+
+    public func sendMessage(orderId: UUID, body: String) async throws -> ChatMessage {
+        guard let uid = AuthService.shared.userId else {
+            throw ServiceError.notAuthenticated
+        }
+        let insert = ChatMessageInsert(orderId: orderId, senderId: uid, body: body)
+        return try await client.from("chat_messages")
+            .insert(insert)
+            .select()
+            .single()
+            .execute()
+            .value
+    }
+
+    public func fetchMessages(orderId: UUID) async throws -> [ChatMessage] {
+        guard AuthService.shared.userId != nil else {
+            throw ServiceError.notAuthenticated
+        }
+        return try await client.from("chat_messages")
+            .select()
+            .eq("order_id", value: orderId.uuidString)
+            .order("created_at")
+            .execute()
+            .value
+    }
+
+    public func markMessagesAsRead(orderId: UUID) async throws {
+        guard let uid = AuthService.shared.userId else {
+            throw ServiceError.notAuthenticated
+        }
+        try await client.from("chat_messages")
+            .update(["read_at": AnyJSON.string(Self.isoFormatter.string(from: Date()))])
+            .eq("order_id", value: orderId.uuidString)
+            .neq("sender_id", value: uid.uuidString)
+            .is("read_at", value: nil)
+            .execute()
+    }
+
+    public func fetchUnreadCount(orderId: UUID) async throws -> Int {
+        guard let uid = AuthService.shared.userId else {
+            throw ServiceError.notAuthenticated
+        }
+        let messages: [ChatMessage] = try await client.from("chat_messages")
+            .select()
+            .eq("order_id", value: orderId.uuidString)
+            .neq("sender_id", value: uid.uuidString)
+            .is("read_at", value: nil)
+            .execute()
+            .value
+        return messages.count
     }
 }

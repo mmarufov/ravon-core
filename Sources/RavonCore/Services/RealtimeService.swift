@@ -31,6 +31,14 @@ public struct CourierLocationEvent: Sendable {
     }
 }
 
+public struct ChatMessageEvent: Sendable {
+    public let message: ChatMessage
+
+    public init(message: ChatMessage) {
+        self.message = message
+    }
+}
+
 public struct MenuItemChangeEvent: Sendable {
     public let menuItemId: UUID
     public let restaurantId: UUID
@@ -55,10 +63,13 @@ public final class RealtimeService: ObservableObject {
     private var orderTask: Task<Void, Never>?
     private var menuTask: Task<Void, Never>?
     private var courierLocationTask: Task<Void, Never>?
+    private var chatChannel: RealtimeChannelV2?
+    private var chatTask: Task<Void, Never>?
 
     @Published public private(set) var lastOrderChange: OrderChangeEvent?
     @Published public private(set) var lastMenuItemChange: MenuItemChangeEvent?
     @Published public private(set) var lastCourierLocationChange: CourierLocationEvent?
+    @Published public private(set) var lastChatMessage: ChatMessageEvent?
 
     public init() {}
 
@@ -266,6 +277,53 @@ public final class RealtimeService: ObservableObject {
         }
     }
 
+    // MARK: - Chat Message Subscriptions
+
+    /// Subscribe to new messages for a specific order (consumer or courier in active chat)
+    public func subscribeToChat(orderId: UUID) async throws {
+        await unsubscribeFromChat()
+        let channel = client.channel("chat-\(orderId.uuidString)")
+        let changes = channel.postgresChange(
+            InsertAction.self,
+            schema: "public",
+            table: "chat_messages",
+            filter: .eq("order_id", value: orderId)
+        )
+        try await channel.subscribeWithError()
+        chatChannel = channel
+
+        chatTask = Task { [weak self] in
+            for await change in changes {
+                guard let self, !Task.isCancelled else { return }
+                let id = change.record["id"]
+                    .flatMap({ if case .string(let s) = $0 { return s } else { return nil } })
+                    .flatMap({ UUID(uuidString: $0) })
+                let senderId = change.record["sender_id"]
+                    .flatMap({ if case .string(let s) = $0 { return s } else { return nil } })
+                    .flatMap({ UUID(uuidString: $0) })
+                let body = change.record["body"]
+                    .flatMap({ if case .string(let s) = $0 { return s } else { return nil } })
+                let createdAtStr = change.record["created_at"]
+                    .flatMap({ if case .string(let s) = $0 { return s } else { return nil } })
+
+                if let id, let senderId, let body {
+                    let createdAt = createdAtStr
+                        .flatMap({ ISO8601DateFormatter().date(from: $0) }) ?? Date()
+                    let message = ChatMessage(
+                        id: id,
+                        orderId: orderId,
+                        senderId: senderId,
+                        body: body,
+                        createdAt: createdAt
+                    )
+                    await MainActor.run {
+                        self.lastChatMessage = ChatMessageEvent(message: message)
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Unsubscribe
 
     public func unsubscribeFromCourierLocation() async {
@@ -295,9 +353,19 @@ public final class RealtimeService: ObservableObject {
         }
     }
 
+    public func unsubscribeFromChat() async {
+        chatTask?.cancel()
+        chatTask = nil
+        if let channel = chatChannel {
+            await client.removeChannel(channel)
+            chatChannel = nil
+        }
+    }
+
     public func unsubscribeAll() async {
         await unsubscribeFromOrders()
         await unsubscribeFromMenu()
         await unsubscribeFromCourierLocation()
+        await unsubscribeFromChat()
     }
 }

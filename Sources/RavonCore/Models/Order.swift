@@ -60,6 +60,16 @@ public enum OrderStatus: String, Codable, CaseIterable, Sendable {
         }
     }
 
+    public var isChatActive: Bool {
+        switch self {
+        case .assigned, .courierArrivedRestaurant, .pickedUp,
+             .delivering, .courierArrivedCustomer:
+            return true
+        default:
+            return false
+        }
+    }
+
     public var stepIndex: Int {
         switch self {
         case .created:                  return 0
