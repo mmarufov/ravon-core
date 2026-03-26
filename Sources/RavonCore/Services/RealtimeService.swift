@@ -65,11 +65,14 @@ public final class RealtimeService: ObservableObject {
     private var courierLocationTask: Task<Void, Never>?
     private var chatChannel: RealtimeChannelV2?
     private var chatTask: Task<Void, Never>?
+    private var availableOrdersChannel: RealtimeChannelV2?
+    private var availableOrdersTask: Task<Void, Never>?
 
     @Published public private(set) var lastOrderChange: OrderChangeEvent?
     @Published public private(set) var lastMenuItemChange: MenuItemChangeEvent?
     @Published public private(set) var lastCourierLocationChange: CourierLocationEvent?
     @Published public private(set) var lastChatMessage: ChatMessageEvent?
+    @Published public private(set) var lastAvailableOrderChange: OrderChangeEvent?
 
     public init() {}
 
@@ -277,6 +280,55 @@ public final class RealtimeService: ObservableObject {
         }
     }
 
+    // MARK: - Available Orders Subscriptions (Courier)
+
+    /// Subscribe to order changes so couriers see new available orders in real-time
+    public func subscribeToAvailableOrders() async throws {
+        await unsubscribeFromAvailableOrders()
+        let channel = client.channel("available-orders")
+        let changes = channel.postgresChange(
+            AnyAction.self,
+            schema: "public",
+            table: "orders"
+        )
+        try await channel.subscribeWithError()
+        availableOrdersChannel = channel
+
+        availableOrdersTask = Task { [weak self] in
+            for await change in changes {
+                guard let self, !Task.isCancelled else { return }
+                let record: [String: AnyJSON]
+                let oldRecord: [String: AnyJSON]?
+                switch change {
+                case .insert(let action):
+                    record = action.record
+                    oldRecord = nil
+                case .update(let action):
+                    record = action.record
+                    oldRecord = action.oldRecord
+                case .delete:
+                    continue
+                }
+                let newStatus = record["status"]
+                    .flatMap({ if case .string(let s) = $0 { return s } else { return nil } })
+                    .flatMap({ OrderStatus(rawValue: $0) })
+                let oldStatus = oldRecord?["status"]
+                    .flatMap({ if case .string(let s) = $0 { return s } else { return nil } })
+                    .flatMap({ OrderStatus(rawValue: $0) })
+                let id = record["id"]
+                    .flatMap({ if case .string(let s) = $0 { return s } else { return nil } })
+                    .flatMap({ UUID(uuidString: $0) })
+                if let newStatus, let id {
+                    await MainActor.run {
+                        self.lastAvailableOrderChange = OrderChangeEvent(
+                            orderId: id, oldStatus: oldStatus, newStatus: newStatus, record: record
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Chat Message Subscriptions
 
     /// Subscribe to new messages for a specific order (consumer or courier in active chat)
@@ -353,6 +405,15 @@ public final class RealtimeService: ObservableObject {
         }
     }
 
+    public func unsubscribeFromAvailableOrders() async {
+        availableOrdersTask?.cancel()
+        availableOrdersTask = nil
+        if let channel = availableOrdersChannel {
+            await client.removeChannel(channel)
+            availableOrdersChannel = nil
+        }
+    }
+
     public func unsubscribeFromChat() async {
         chatTask?.cancel()
         chatTask = nil
@@ -366,6 +427,7 @@ public final class RealtimeService: ObservableObject {
         await unsubscribeFromOrders()
         await unsubscribeFromMenu()
         await unsubscribeFromCourierLocation()
+        await unsubscribeFromAvailableOrders()
         await unsubscribeFromChat()
     }
 }

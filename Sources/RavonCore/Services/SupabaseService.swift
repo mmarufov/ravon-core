@@ -13,6 +13,7 @@ public enum ServiceError: LocalizedError, Sendable {
     case restaurantNotAccepting
     case restaurantOverloaded
     case insufficientStock
+    case cancelNotAllowed
 
     public var errorDescription: String? {
         switch self {
@@ -27,6 +28,7 @@ public enum ServiceError: LocalizedError, Sendable {
         case .restaurantNotAccepting:  return "Ресторан не принимает заказы"
         case .restaurantOverloaded:    return "Ресторан перегружен заказами"
         case .insufficientStock:       return "Недостаточно товара на складе"
+        case .cancelNotAllowed:        return "Отмена невозможна — заказ уже забран курьером"
         }
     }
 }
@@ -177,14 +179,6 @@ public final class SupabaseService {
             .value
     }
 
-    /// Update order status (used by Merchant and Courier apps)
-    public func updateOrderStatus(orderId: UUID, status: OrderStatus) async throws {
-        try await client.from("orders")
-            .update(["status": status.rawValue])
-            .eq("id", value: orderId.uuidString)
-            .execute()
-    }
-
     // MARK: - Create Order (via RPC)
 
     public struct CreateOrderParams: Encodable, Sendable {
@@ -250,6 +244,17 @@ public final class SupabaseService {
         guard !results.isEmpty else { throw ServiceError.invalidStatusTransition }
     }
 
+    public func startPreparing(orderId: UUID) async throws {
+        let results: [IdRow] = try await client.from("orders")
+            .update(["status": AnyJSON.string(OrderStatus.preparing.rawValue)])
+            .eq("id", value: orderId.uuidString)
+            .eq("status", value: OrderStatus.accepted.rawValue)
+            .select("id")
+            .execute()
+            .value
+        guard !results.isEmpty else { throw ServiceError.invalidStatusTransition }
+    }
+
     public func rejectOrder(orderId: UUID, reason: String) async throws {
         guard let uid = AuthService.shared.userId else {
             throw ServiceError.notAuthenticated
@@ -309,6 +314,17 @@ public final class SupabaseService {
         guard !results.isEmpty else { throw ServiceError.invalidVerificationCode }
     }
 
+    public func startDelivering(orderId: UUID) async throws {
+        let results: [IdRow] = try await client.from("orders")
+            .update(["status": AnyJSON.string(OrderStatus.delivering.rawValue)])
+            .eq("id", value: orderId.uuidString)
+            .eq("status", value: OrderStatus.pickedUp.rawValue)
+            .select("id")
+            .execute()
+            .value
+        guard !results.isEmpty else { throw ServiceError.invalidStatusTransition }
+    }
+
     public func courierArrivedAtCustomer(orderId: UUID) async throws {
         let results: [IdRow] = try await client.from("orders")
             .update(["status": AnyJSON.string(OrderStatus.courierArrivedCustomer.rawValue)])
@@ -347,15 +363,35 @@ public final class SupabaseService {
         if let reason {
             updates["cancellation_reason"] = .string(reason)
         }
-        let activeStatuses = OrderStatus.allCases.filter(\.isActive).map(\.rawValue)
+        // Only allow cancel before courier picks up the food
+        let cancellableStatuses: [String] = [
+            OrderStatus.created.rawValue,
+            OrderStatus.accepted.rawValue,
+            OrderStatus.preparing.rawValue,
+            OrderStatus.ready.rawValue,
+            OrderStatus.assigned.rawValue,
+            OrderStatus.courierArrivedRestaurant.rawValue,
+        ]
         let results: [IdRow] = try await client.from("orders")
             .update(updates)
             .eq("id", value: orderId.uuidString)
-            .in("status", values: activeStatuses)
+            .in("status", values: cancellableStatuses)
             .select("id")
             .execute()
             .value
-        guard !results.isEmpty else { throw ServiceError.invalidStatusTransition }
+        if results.isEmpty {
+            // Check if the order exists but is past pickup
+            let order: Order = try await client.from("orders")
+                .select()
+                .eq("id", value: orderId.uuidString)
+                .single()
+                .execute()
+                .value
+            if order.status == .pickedUp || order.status == .delivering || order.status == .courierArrivedCustomer {
+                throw ServiceError.cancelNotAllowed
+            }
+            throw ServiceError.invalidStatusTransition
+        }
     }
 
     // MARK: - Order Lifecycle (Shared)
@@ -380,6 +416,10 @@ public final class SupabaseService {
     }
 
     public func addTip(orderId: UUID, amount: Double) async throws {
+        guard AuthService.shared.userId != nil else {
+            throw ServiceError.notAuthenticated
+        }
+        guard amount >= 0 else { return }
         try await client.from("orders")
             .update(["tip_amount": AnyJSON.double(amount)])
             .eq("id", value: orderId.uuidString)
@@ -763,13 +803,13 @@ public final class SupabaseService {
         guard let uid = AuthService.shared.userId else {
             throw ServiceError.notAuthenticated
         }
-        let messages: [ChatMessage] = try await client.from("chat_messages")
-            .select()
+        let rows: [IdRow] = try await client.from("chat_messages")
+            .select("id")
             .eq("order_id", value: orderId.uuidString)
             .neq("sender_id", value: uid.uuidString)
             .is("read_at", value: nil)
             .execute()
             .value
-        return messages.count
+        return rows.count
     }
 }

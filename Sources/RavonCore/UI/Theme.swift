@@ -18,6 +18,7 @@ public struct CardStyle: ViewModifier {
     public var padding: CGFloat = 0
     public func body(content: Content) -> some View {
         content
+            .padding(padding)
             .background(.background)
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
@@ -110,7 +111,7 @@ public struct RavonTextField: View {
                 TextField(placeholder, text: $text)
                     .keyboardType(keyboardType)
                     .textContentType(contentType)
-                    .autocapitalization(.none)
+                    .textInputAutocapitalization(.never)
             }
         }
         .padding(.horizontal, 16)

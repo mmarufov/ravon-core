@@ -40,20 +40,24 @@ public struct AddressInsert: Encodable, Sendable {
     public let street: String
     public let apartment: String?
     public let city: String
+    public let latitude: Double?
+    public let longitude: Double?
     public let isDefault: Bool
 
-    public init(userId: UUID, label: String, street: String, apartment: String? = nil, city: String, isDefault: Bool) {
+    public init(userId: UUID, label: String, street: String, apartment: String? = nil, city: String, latitude: Double? = nil, longitude: Double? = nil, isDefault: Bool) {
         self.userId = userId
         self.label = label
         self.street = street
         self.apartment = apartment
         self.city = city
+        self.latitude = latitude
+        self.longitude = longitude
         self.isDefault = isDefault
     }
 
     enum CodingKeys: String, CodingKey {
         case userId = "user_id"
-        case label, street, apartment, city
+        case label, street, apartment, city, latitude, longitude
         case isDefault = "is_default"
     }
 }
