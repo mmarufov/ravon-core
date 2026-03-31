@@ -348,6 +348,8 @@ public final class SupabaseService {
             .execute()
             .value
         guard !results.isEmpty else { throw ServiceError.invalidStatusTransition }
+        // Clear courier's active order so they return to available status
+        try await clearCurrentOrder()
     }
 
     // MARK: - Order Lifecycle (Consumer)
@@ -533,7 +535,7 @@ public final class SupabaseService {
     /// Fetch all available orders without location filter (for testing / fallback)
     public func fetchAvailableOrders() async throws -> [Order] {
         try await client.from("orders")
-            .select()
+            .select("*, restaurants(*), order_items(*)")
             .is("courier_id", value: nil)
             .in("status", values: ["accepted", "preparing", "ready"])
             .order("created_at")
@@ -557,6 +559,40 @@ public final class SupabaseService {
             p_longitude: longitude,
             p_radius_km: radiusKm
         )).execute().value
+    }
+
+    // MARK: - Courier Active Order
+
+    /// Fetch the courier's current active (non-terminal) order for state restoration
+    public func fetchActiveOrder(courierId: UUID) async throws -> Order? {
+        let terminalStatuses = [
+            OrderStatus.delivered.rawValue,
+            OrderStatus.cancelled.rawValue,
+            OrderStatus.cancelledByCustomer.rawValue,
+            OrderStatus.cancelledByRestaurant.rawValue,
+            OrderStatus.cancelledBySystem.rawValue,
+            OrderStatus.rejected.rawValue,
+        ]
+        let orders: [Order] = try await client.from("orders")
+            .select("*, restaurants(*), order_items(*)")
+            .eq("courier_id", value: courierId.uuidString)
+            .not("status", operator: .in, value: "(\(terminalStatuses.joined(separator: ",")))")
+            .order("updated_at", ascending: false)
+            .limit(1)
+            .execute()
+            .value
+        return orders.first
+    }
+
+    /// Clear current_order_id on courier_locations so courier can receive new offers
+    public func clearCurrentOrder() async throws {
+        guard let uid = AuthService.shared.userId else {
+            throw ServiceError.notAuthenticated
+        }
+        try await client.from("courier_locations")
+            .update(["current_order_id": AnyJSON.null])
+            .eq("courier_id", value: uid.uuidString)
+            .execute()
     }
 
     // MARK: - Courier Earnings
