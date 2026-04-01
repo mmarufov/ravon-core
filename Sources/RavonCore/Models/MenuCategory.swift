@@ -20,3 +20,23 @@ public struct MenuCategory: Codable, Identifiable, Sendable {
         case sortOrder = "sort_order"
     }
 }
+
+// MARK: - Menu Category Insert
+
+public struct MenuCategoryInsert: Encodable, Sendable {
+    public let restaurantId: UUID
+    public let name: String
+    public let sortOrder: Int
+
+    public init(restaurantId: UUID, name: String, sortOrder: Int) {
+        self.restaurantId = restaurantId
+        self.name = name
+        self.sortOrder = sortOrder
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case restaurantId = "restaurant_id"
+        case sortOrder = "sort_order"
+    }
+}

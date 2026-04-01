@@ -14,21 +14,31 @@ public enum ServiceError: LocalizedError, Sendable {
     case restaurantOverloaded
     case insufficientStock
     case cancelNotAllowed
+    case merchantAlreadyHasRestaurant
+    case onboardingIncomplete
+    case imageTooLarge
+    case unsupportedImageFormat
+    case categoryNotEmpty
 
     public var errorDescription: String? {
         switch self {
-        case .notAuthenticated:        return "Пользователь не авторизован"
-        case .invalidResponse:         return "Ошибка ответа сервера"
-        case .orderNotFound:           return "Заказ не найден"
-        case .invalidStatusTransition: return "Недопустимый переход статуса"
-        case .unauthorized:            return "Недостаточно прав"
-        case .invalidVerificationCode: return "Неверный код подтверждения"
-        case .orderAlreadyClaimed:     return "Заказ уже занят другим курьером"
-        case .restaurantClosed:        return "Ресторан сейчас закрыт"
-        case .restaurantNotAccepting:  return "Ресторан не принимает заказы"
-        case .restaurantOverloaded:    return "Ресторан перегружен заказами"
-        case .insufficientStock:       return "Недостаточно товара на складе"
-        case .cancelNotAllowed:        return "Отмена невозможна — заказ уже забран курьером"
+        case .notAuthenticated:              return "Пользователь не авторизован"
+        case .invalidResponse:               return "Ошибка ответа сервера"
+        case .orderNotFound:                 return "Заказ не найден"
+        case .invalidStatusTransition:       return "Недопустимый переход статуса"
+        case .unauthorized:                  return "Недостаточно прав"
+        case .invalidVerificationCode:       return "Неверный код подтверждения"
+        case .orderAlreadyClaimed:           return "Заказ уже занят другим курьером"
+        case .restaurantClosed:              return "Ресторан сейчас закрыт"
+        case .restaurantNotAccepting:        return "Ресторан не принимает заказы"
+        case .restaurantOverloaded:          return "Ресторан перегружен заказами"
+        case .insufficientStock:             return "Недостаточно товара на складе"
+        case .cancelNotAllowed:              return "Отмена невозможна — заказ уже забран курьером"
+        case .merchantAlreadyHasRestaurant:  return "У вас уже есть ресторан"
+        case .onboardingIncomplete:          return "Заполните все данные перед открытием"
+        case .imageTooLarge:                 return "Изображение слишком большое (макс. 5 МБ)"
+        case .unsupportedImageFormat:        return "Неподдерживаемый формат изображения"
+        case .categoryNotEmpty:              return "Удалите все блюда из категории перед удалением"
         }
     }
 }
@@ -78,6 +88,7 @@ public final class SupabaseService {
         try await client.from("restaurants")
             .select()
             .eq("is_active", value: true)
+            .eq("restaurant_status", value: RestaurantStatus.active.rawValue)
             .order("rating", ascending: false)
             .execute()
             .value
@@ -847,5 +858,329 @@ public final class SupabaseService {
             .execute()
             .value
         return rows.count
+    }
+
+    // MARK: - Merchant Restaurant CRUD
+
+    /// Create a new restaurant for the authenticated merchant (1 per merchant enforced by DB unique index)
+    public func createRestaurant(_ insert: RestaurantInsert) async throws -> Restaurant {
+        guard AuthService.shared.userId != nil else {
+            throw ServiceError.notAuthenticated
+        }
+        // Pre-check: does this merchant already have a restaurant?
+        if let _ = try await fetchMyRestaurant() {
+            throw ServiceError.merchantAlreadyHasRestaurant
+        }
+        return try await client.from("restaurants")
+            .insert(insert)
+            .select()
+            .single()
+            .execute()
+            .value
+    }
+
+    /// Fetch the authenticated merchant's restaurant (nil if none yet)
+    public func fetchMyRestaurant() async throws -> Restaurant? {
+        guard let uid = AuthService.shared.userId else {
+            throw ServiceError.notAuthenticated
+        }
+        let restaurants: [Restaurant] = try await client.from("restaurants")
+            .select()
+            .eq("owner_id", value: uid.uuidString)
+            .limit(1)
+            .execute()
+            .value
+        return restaurants.first
+    }
+
+    // MARK: - Restaurant Lifecycle
+
+    /// Activate restaurant (draft → active). Checks onboarding completeness.
+    public func activateRestaurant(id: UUID) async throws {
+        let progress = try await fetchOnboardingProgress()
+        guard progress.isReadyToGoLive else {
+            throw ServiceError.onboardingIncomplete
+        }
+        let results: [IdRow] = try await client.from("restaurants")
+            .update(["restaurant_status": AnyJSON.string(RestaurantStatus.active.rawValue)])
+            .eq("id", value: id.uuidString)
+            .eq("restaurant_status", value: RestaurantStatus.draft.rawValue)
+            .select("id")
+            .execute()
+            .value
+        guard !results.isEmpty else { throw ServiceError.invalidStatusTransition }
+    }
+
+    /// Resume restaurant (paused → active). No onboarding check needed.
+    public func resumeRestaurant(id: UUID) async throws {
+        let results: [IdRow] = try await client.from("restaurants")
+            .update(["restaurant_status": AnyJSON.string(RestaurantStatus.active.rawValue)])
+            .eq("id", value: id.uuidString)
+            .eq("restaurant_status", value: RestaurantStatus.paused.rawValue)
+            .select("id")
+            .execute()
+            .value
+        guard !results.isEmpty else { throw ServiceError.invalidStatusTransition }
+    }
+
+    /// Pause restaurant (active → paused)
+    public func pauseRestaurant(id: UUID) async throws {
+        let results: [IdRow] = try await client.from("restaurants")
+            .update(["restaurant_status": AnyJSON.string(RestaurantStatus.paused.rawValue)])
+            .eq("id", value: id.uuidString)
+            .eq("restaurant_status", value: RestaurantStatus.active.rawValue)
+            .select("id")
+            .execute()
+            .value
+        guard !results.isEmpty else { throw ServiceError.invalidStatusTransition }
+    }
+
+    /// Close restaurant permanently (active or paused → closed)
+    public func closeRestaurant(id: UUID) async throws {
+        let results: [IdRow] = try await client.from("restaurants")
+            .update(["restaurant_status": AnyJSON.string(RestaurantStatus.closed.rawValue)])
+            .eq("id", value: id.uuidString)
+            .in("restaurant_status", values: [RestaurantStatus.active.rawValue, RestaurantStatus.paused.rawValue])
+            .select("id")
+            .execute()
+            .value
+        guard !results.isEmpty else { throw ServiceError.invalidStatusTransition }
+    }
+
+    // MARK: - Onboarding Progress
+
+    /// Fetch onboarding progress for the merchant's restaurant
+    public func fetchOnboardingProgress() async throws -> OnboardingProgress {
+        guard let restaurant = try await fetchMyRestaurant() else {
+            return OnboardingProgress()
+        }
+        let categories = try await fetchMenuCategories(restaurantId: restaurant.id)
+        let items = try await fetchAllMenuItems(restaurantId: restaurant.id)
+        let hours = try await fetchRestaurantHours(restaurantId: restaurant.id)
+
+        return OnboardingProgress(
+            hasRestaurant: true,
+            hasName: !restaurant.name.isEmpty,
+            hasAddress: restaurant.address != nil && !restaurant.address!.isEmpty,
+            hasAtLeastOneCategory: !categories.isEmpty,
+            hasAtLeastOneMenuItem: !items.isEmpty,
+            hasHoursConfigured: !hours.isEmpty
+        )
+    }
+
+    /// Preview restaurant as consumer sees it (available items only, sorted categories)
+    public func fetchRestaurantPreview(restaurantId: UUID) async throws -> (Restaurant, [MenuCategory], [MenuItem]) {
+        let restaurant = try await fetchRestaurant(id: restaurantId)
+        let categories = try await fetchMenuCategories(restaurantId: restaurantId)
+        let items = try await fetchMenuItems(restaurantId: restaurantId)
+        return (restaurant, categories, items)
+    }
+
+    // MARK: - Menu Category CRUD
+
+    public func createMenuCategory(_ insert: MenuCategoryInsert) async throws -> MenuCategory {
+        try await client.from("menu_categories")
+            .insert(insert)
+            .select()
+            .single()
+            .execute()
+            .value
+    }
+
+    public func updateMenuCategory(id: UUID, name: String? = nil, sortOrder: Int? = nil) async throws {
+        var updates: [String: AnyJSON] = [:]
+        if let name { updates["name"] = .string(name) }
+        if let sortOrder { updates["sort_order"] = .integer(sortOrder) }
+        guard !updates.isEmpty else { return }
+        try await client.from("menu_categories")
+            .update(updates)
+            .eq("id", value: id.uuidString)
+            .execute()
+    }
+
+    public func deleteMenuCategory(id: UUID) async throws {
+        // Pre-check: category must be empty
+        let items: [IdRow] = try await client.from("menu_items")
+            .select("id")
+            .eq("category_id", value: id.uuidString)
+            .limit(1)
+            .execute()
+            .value
+        guard items.isEmpty else { throw ServiceError.categoryNotEmpty }
+        try await client.from("menu_categories")
+            .delete()
+            .eq("id", value: id.uuidString)
+            .execute()
+    }
+
+    // MARK: - Menu Item CRUD
+
+    public func createMenuItem(_ insert: MenuItemInsert) async throws -> MenuItem {
+        try await client.from("menu_items")
+            .insert(insert)
+            .select()
+            .single()
+            .execute()
+            .value
+    }
+
+    public func deleteMenuItem(id: UUID) async throws {
+        try await client.from("menu_items")
+            .delete()
+            .eq("id", value: id.uuidString)
+            .execute()
+    }
+
+    // MARK: - Modifier Group CRUD
+
+    public func createModifierGroup(_ insert: ModifierGroupInsert) async throws -> ModifierGroup {
+        try await client.from("modifier_groups")
+            .insert(insert)
+            .select("*, modifier_options(*)")
+            .single()
+            .execute()
+            .value
+    }
+
+    public func updateModifierGroup(
+        id: UUID, name: String? = nil, isRequired: Bool? = nil,
+        minSelections: Int? = nil, maxSelections: Int? = nil, sortOrder: Int? = nil
+    ) async throws {
+        var updates: [String: AnyJSON] = [:]
+        if let name { updates["name"] = .string(name) }
+        if let isRequired { updates["is_required"] = .bool(isRequired) }
+        if let minSelections { updates["min_selections"] = .integer(minSelections) }
+        if let maxSelections { updates["max_selections"] = .integer(maxSelections) }
+        if let sortOrder { updates["sort_order"] = .integer(sortOrder) }
+        guard !updates.isEmpty else { return }
+        try await client.from("modifier_groups")
+            .update(updates)
+            .eq("id", value: id.uuidString)
+            .execute()
+    }
+
+    public func deleteModifierGroup(id: UUID) async throws {
+        try await client.from("modifier_groups")
+            .delete()
+            .eq("id", value: id.uuidString)
+            .execute()
+    }
+
+    // MARK: - Modifier Option CRUD
+
+    public func createModifierOption(_ insert: ModifierOptionInsert) async throws -> ModifierOption {
+        try await client.from("modifier_options")
+            .insert(insert)
+            .select()
+            .single()
+            .execute()
+            .value
+    }
+
+    public func updateModifierOption(
+        id: UUID, name: String? = nil, priceAdjustment: Double? = nil,
+        isAvailable: Bool? = nil, sortOrder: Int? = nil
+    ) async throws {
+        var updates: [String: AnyJSON] = [:]
+        if let name { updates["name"] = .string(name) }
+        if let priceAdjustment { updates["price_adjustment"] = .double(priceAdjustment) }
+        if let isAvailable { updates["is_available"] = .bool(isAvailable) }
+        if let sortOrder { updates["sort_order"] = .integer(sortOrder) }
+        guard !updates.isEmpty else { return }
+        try await client.from("modifier_options")
+            .update(updates)
+            .eq("id", value: id.uuidString)
+            .execute()
+    }
+
+    public func deleteModifierOption(id: UUID) async throws {
+        try await client.from("modifier_options")
+            .delete()
+            .eq("id", value: id.uuidString)
+            .execute()
+    }
+
+    // MARK: - Modifier Group ↔ Menu Item Linking
+
+    public func linkModifierGroup(menuItemId: UUID, modifierGroupId: UUID) async throws {
+        let link = MenuItemModifierGroup(menuItemId: menuItemId, modifierGroupId: modifierGroupId)
+        try await client.from("menu_item_modifier_groups")
+            .insert(link)
+            .execute()
+    }
+
+    public func unlinkModifierGroup(menuItemId: UUID, modifierGroupId: UUID) async throws {
+        try await client.from("menu_item_modifier_groups")
+            .delete()
+            .eq("menu_item_id", value: menuItemId.uuidString)
+            .eq("modifier_group_id", value: modifierGroupId.uuidString)
+            .execute()
+    }
+
+    // MARK: - Image Upload
+
+    private static let maxImageSize = 5 * 1024 * 1024 // 5 MB
+    private static let allowedImageFormats = ["jpg", "jpeg", "png", "webp"]
+
+    /// Upload restaurant image to Supabase Storage, returns public URL string
+    public func uploadRestaurantImage(restaurantId: UUID, imageData: Data, fileExtension: String) async throws -> String {
+        guard let uid = AuthService.shared.userId else {
+            throw ServiceError.notAuthenticated
+        }
+        try validateImage(data: imageData, fileExtension: fileExtension)
+        let path = "\(uid.uuidString)/\(restaurantId.uuidString).\(fileExtension)"
+        try await client.storage.from("restaurant-images")
+            .upload(path, data: imageData, options: .init(contentType: "image/\(fileExtension)", upsert: true))
+        let publicURL = try client.storage.from("restaurant-images").getPublicURL(path: path)
+        // Update restaurant image_url
+        try await client.from("restaurants")
+            .update(["image_url": AnyJSON.string(publicURL.absoluteString)])
+            .eq("id", value: restaurantId.uuidString)
+            .execute()
+        return publicURL.absoluteString
+    }
+
+    /// Upload menu item image to Supabase Storage, returns public URL string
+    public func uploadMenuItemImage(menuItemId: UUID, imageData: Data, fileExtension: String) async throws -> String {
+        guard let uid = AuthService.shared.userId else {
+            throw ServiceError.notAuthenticated
+        }
+        try validateImage(data: imageData, fileExtension: fileExtension)
+        let path = "\(uid.uuidString)/\(menuItemId.uuidString).\(fileExtension)"
+        try await client.storage.from("menu-item-images")
+            .upload(path, data: imageData, options: .init(contentType: "image/\(fileExtension)", upsert: true))
+        let publicURL = try client.storage.from("menu-item-images").getPublicURL(path: path)
+        // Update menu item image_url
+        try await client.from("menu_items")
+            .update(["image_url": AnyJSON.string(publicURL.absoluteString)])
+            .eq("id", value: menuItemId.uuidString)
+            .execute()
+        return publicURL.absoluteString
+    }
+
+    /// Delete an image from storage
+    public func deleteImage(bucket: String, path: String) async throws {
+        try await client.storage.from(bucket).remove(paths: [path])
+    }
+
+    private func validateImage(data: Data, fileExtension: String) throws {
+        guard data.count <= Self.maxImageSize else {
+            throw ServiceError.imageTooLarge
+        }
+        guard Self.allowedImageFormats.contains(fileExtension.lowercased()) else {
+            throw ServiceError.unsupportedImageFormat
+        }
+    }
+
+    // MARK: - Merchant Stats
+
+    /// Fetch basic dashboard stats for merchant's restaurant (server-side RPC)
+    public func fetchMerchantStats(restaurantId: UUID) async throws -> MerchantStats {
+        struct Params: Encodable {
+            let p_restaurant_id: UUID
+        }
+        return try await client.rpc("get_merchant_stats", params: Params(
+            p_restaurant_id: restaurantId
+        )).execute().value
     }
 }

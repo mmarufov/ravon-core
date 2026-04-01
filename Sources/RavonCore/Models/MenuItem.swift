@@ -36,3 +36,40 @@ public struct MenuItem: Codable, Identifiable, Hashable, Sendable {
         case stockCount = "stock_count"
     }
 }
+
+// MARK: - Menu Item Insert
+
+public struct MenuItemInsert: Encodable, Sendable {
+    public let restaurantId: UUID
+    public let categoryId: UUID
+    public let name: String
+    public let description: String?
+    public let price: Double
+    public let imageUrl: String?
+    public let isAvailable: Bool
+    public let sortOrder: Int
+
+    public init(
+        restaurantId: UUID, categoryId: UUID, name: String,
+        description: String? = nil, price: Double, imageUrl: String? = nil,
+        isAvailable: Bool = true, sortOrder: Int = 0
+    ) {
+        self.restaurantId = restaurantId
+        self.categoryId = categoryId
+        self.name = name
+        self.description = description
+        self.price = price
+        self.imageUrl = imageUrl
+        self.isAvailable = isAvailable
+        self.sortOrder = sortOrder
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case name, description, price
+        case restaurantId = "restaurant_id"
+        case categoryId = "category_id"
+        case imageUrl = "image_url"
+        case isAvailable = "is_available"
+        case sortOrder = "sort_order"
+    }
+}
