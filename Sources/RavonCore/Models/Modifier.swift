@@ -82,6 +82,66 @@ public struct MenuItemModifierGroup: Codable, Sendable {
     }
 }
 
+// MARK: - Modifier Group Insert
+
+public struct ModifierGroupInsert: Encodable, Sendable {
+    public let restaurantId: UUID
+    public let name: String
+    public let isRequired: Bool
+    public let minSelections: Int
+    public let maxSelections: Int
+    public let sortOrder: Int
+
+    public init(
+        restaurantId: UUID, name: String, isRequired: Bool = false,
+        minSelections: Int = 0, maxSelections: Int = 1, sortOrder: Int = 0
+    ) {
+        self.restaurantId = restaurantId
+        self.name = name
+        self.isRequired = isRequired
+        self.minSelections = minSelections
+        self.maxSelections = maxSelections
+        self.sortOrder = sortOrder
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case restaurantId = "restaurant_id"
+        case isRequired = "is_required"
+        case minSelections = "min_selections"
+        case maxSelections = "max_selections"
+        case sortOrder = "sort_order"
+    }
+}
+
+// MARK: - Modifier Option Insert
+
+public struct ModifierOptionInsert: Encodable, Sendable {
+    public let groupId: UUID
+    public let name: String
+    public let priceAdjustment: Double
+    public let sortOrder: Int
+
+    public init(
+        groupId: UUID, name: String,
+        priceAdjustment: Double = 0, sortOrder: Int = 0
+    ) {
+        self.groupId = groupId
+        self.name = name
+        self.priceAdjustment = priceAdjustment
+        self.sortOrder = sortOrder
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case groupId = "group_id"
+        case priceAdjustment = "price_adjustment"
+        case sortOrder = "sort_order"
+    }
+}
+
+// MARK: - Order Item Modifier
+
 public struct OrderItemModifier: Codable, Identifiable, Sendable {
     public let id: UUID
     public let orderItemId: UUID
