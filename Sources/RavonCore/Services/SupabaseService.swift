@@ -955,7 +955,13 @@ public final class SupabaseService {
             return OnboardingProgress()
         }
         let categories = try await fetchMenuCategories(restaurantId: restaurant.id)
-        let items = try await fetchAllMenuItems(restaurantId: restaurant.id)
+        let liveItems: [MenuItem] = try await client.from("menu_items")
+            .select()
+            .eq("restaurant_id", value: restaurant.id.uuidString)
+            .eq("is_available", value: true)
+            .gt("price", value: 0)
+            .execute()
+            .value
         let hours = try await fetchRestaurantHours(restaurantId: restaurant.id)
 
         return OnboardingProgress(
@@ -963,7 +969,7 @@ public final class SupabaseService {
             hasName: !restaurant.name.isEmpty,
             hasAddress: restaurant.address != nil && !restaurant.address!.isEmpty,
             hasAtLeastOneCategory: !categories.isEmpty,
-            hasAtLeastOneMenuItem: !items.isEmpty,
+            hasAtLeastOneMenuItem: !liveItems.isEmpty,
             hasHoursConfigured: !hours.isEmpty
         )
     }
