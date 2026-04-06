@@ -299,112 +299,39 @@ public final class SupabaseService {
     // MARK: - Order Lifecycle (Courier)
 
     public func courierArrivedAtRestaurant(orderId: UUID) async throws {
-        let results: [IdRow] = try await client.from("orders")
-            .update(["status": AnyJSON.string(OrderStatus.courierArrivedRestaurant.rawValue)])
-            .eq("id", value: orderId.uuidString)
-            .eq("status", value: OrderStatus.assigned.rawValue)
-            .select("id")
-            .execute()
-            .value
-        guard !results.isEmpty else { throw ServiceError.invalidStatusTransition }
+        struct Params: Encodable { let p_order_id: UUID }
+        try await client.rpc("courier_arrived_restaurant", params: Params(p_order_id: orderId)).execute()
     }
 
     public func pickUpOrder(orderId: UUID, verificationCode: String) async throws {
-        // Atomic: verifies code + status in a single UPDATE WHERE
-        let results: [IdRow] = try await client.from("orders")
-            .update([
-                "status": AnyJSON.string(OrderStatus.pickedUp.rawValue),
-                "picked_up_at": AnyJSON.string(Self.isoFormatter.string(from: Date())),
-            ])
-            .eq("id", value: orderId.uuidString)
-            .eq("status", value: OrderStatus.courierArrivedRestaurant.rawValue)
-            .eq("verification_code", value: verificationCode)
-            .select("id")
-            .execute()
-            .value
-        guard !results.isEmpty else { throw ServiceError.invalidVerificationCode }
+        struct Params: Encodable { let p_order_id: UUID; let p_verification_code: String }
+        try await client.rpc("courier_pickup_order", params: Params(
+            p_order_id: orderId, p_verification_code: verificationCode
+        )).execute()
     }
 
     public func startDelivering(orderId: UUID) async throws {
-        let results: [IdRow] = try await client.from("orders")
-            .update(["status": AnyJSON.string(OrderStatus.delivering.rawValue)])
-            .eq("id", value: orderId.uuidString)
-            .eq("status", value: OrderStatus.pickedUp.rawValue)
-            .select("id")
-            .execute()
-            .value
-        guard !results.isEmpty else { throw ServiceError.invalidStatusTransition }
+        struct Params: Encodable { let p_order_id: UUID }
+        try await client.rpc("courier_start_delivering", params: Params(p_order_id: orderId)).execute()
     }
 
     public func courierArrivedAtCustomer(orderId: UUID) async throws {
-        let results: [IdRow] = try await client.from("orders")
-            .update(["status": AnyJSON.string(OrderStatus.courierArrivedCustomer.rawValue)])
-            .eq("id", value: orderId.uuidString)
-            .eq("status", value: OrderStatus.delivering.rawValue)
-            .select("id")
-            .execute()
-            .value
-        guard !results.isEmpty else { throw ServiceError.invalidStatusTransition }
+        struct Params: Encodable { let p_order_id: UUID }
+        try await client.rpc("courier_arrived_at_customer", params: Params(p_order_id: orderId)).execute()
     }
 
     public func deliverOrder(orderId: UUID) async throws {
-        let results: [IdRow] = try await client.from("orders")
-            .update([
-                "status": AnyJSON.string(OrderStatus.delivered.rawValue),
-                "delivered_at": AnyJSON.string(Self.isoFormatter.string(from: Date())),
-            ])
-            .eq("id", value: orderId.uuidString)
-            .eq("status", value: OrderStatus.courierArrivedCustomer.rawValue)
-            .select("id")
-            .execute()
-            .value
-        guard !results.isEmpty else { throw ServiceError.invalidStatusTransition }
-        // Clear courier's active order so they return to available status
-        try await clearCurrentOrder()
+        struct Params: Encodable { let p_order_id: UUID }
+        try await client.rpc("courier_deliver_order", params: Params(p_order_id: orderId)).execute()
     }
 
     // MARK: - Order Lifecycle (Consumer)
 
     public func cancelOrder(orderId: UUID, reason: String?) async throws {
-        guard let uid = AuthService.shared.userId else {
-            throw ServiceError.notAuthenticated
-        }
-        var updates: [String: AnyJSON] = [
-            "status": .string(OrderStatus.cancelledByCustomer.rawValue),
-            "cancelled_by": .string(uid.uuidString),
-        ]
-        if let reason {
-            updates["cancellation_reason"] = .string(reason)
-        }
-        // Only allow cancel before courier picks up the food
-        let cancellableStatuses: [String] = [
-            OrderStatus.created.rawValue,
-            OrderStatus.accepted.rawValue,
-            OrderStatus.preparing.rawValue,
-            OrderStatus.ready.rawValue,
-            OrderStatus.assigned.rawValue,
-            OrderStatus.courierArrivedRestaurant.rawValue,
-        ]
-        let results: [IdRow] = try await client.from("orders")
-            .update(updates)
-            .eq("id", value: orderId.uuidString)
-            .in("status", values: cancellableStatuses)
-            .select("id")
-            .execute()
-            .value
-        if results.isEmpty {
-            // Check if the order exists but is past pickup
-            let order: Order = try await client.from("orders")
-                .select()
-                .eq("id", value: orderId.uuidString)
-                .single()
-                .execute()
-                .value
-            if order.status == .pickedUp || order.status == .delivering || order.status == .courierArrivedCustomer {
-                throw ServiceError.cancelNotAllowed
-            }
-            throw ServiceError.invalidStatusTransition
-        }
+        struct Params: Encodable { let p_order_id: UUID; let p_reason: String? }
+        try await client.rpc("cancel_order_by_consumer", params: Params(
+            p_order_id: orderId, p_reason: reason
+        )).execute()
     }
 
     // MARK: - Order Lifecycle (Shared)
@@ -429,14 +356,11 @@ public final class SupabaseService {
     }
 
     public func addTip(orderId: UUID, amount: Double) async throws {
-        guard AuthService.shared.userId != nil else {
-            throw ServiceError.notAuthenticated
-        }
         guard amount >= 0 else { return }
-        try await client.from("orders")
-            .update(["tip_amount": AnyJSON.double(amount)])
-            .eq("id", value: orderId.uuidString)
-            .execute()
+        struct Params: Encodable { let p_order_id: UUID; let p_amount: Double }
+        try await client.rpc("add_tip", params: Params(
+            p_order_id: orderId, p_amount: amount
+        )).execute()
     }
 
     // MARK: - Courier Location
