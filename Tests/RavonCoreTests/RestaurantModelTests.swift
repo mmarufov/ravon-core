@@ -49,7 +49,6 @@ struct RestaurantBackwardsCompatTests {
             "delivery_time_min": 30,
             "delivery_fee": 5.0,
             "min_order_amount": 10.0,
-            "is_active": true,
             "is_accepting_orders": true,
             "owner_id": null,
             "restaurant_status": "active"
@@ -59,7 +58,6 @@ struct RestaurantBackwardsCompatTests {
         let restaurant = try decoder.decode(Restaurant.self, from: json)
         #expect(restaurant.ownerId == nil)
         #expect(restaurant.restaurantStatus == .active)
-        #expect(restaurant.isActive == true)
     }
 
     @Test("Decoding with ownerId present")
@@ -73,7 +71,6 @@ struct RestaurantBackwardsCompatTests {
             "delivery_time_min": 30,
             "delivery_fee": 5.0,
             "min_order_amount": 10.0,
-            "is_active": true,
             "is_accepting_orders": true,
             "owner_id": "00000000-0000-0000-0000-000000000099",
             "restaurant_status": "draft"

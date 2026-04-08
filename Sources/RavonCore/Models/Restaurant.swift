@@ -21,7 +21,6 @@ public struct Restaurant: Codable, Identifiable, Hashable, Sendable {
     public let deliveryTimeMin: Int
     public let deliveryFee: Double
     public let minOrderAmount: Double
-    public let isActive: Bool
     public let address: String?
     public let latitude: Double?
     public let longitude: Double?
@@ -35,7 +34,7 @@ public struct Restaurant: Codable, Identifiable, Hashable, Sendable {
     public init(
         id: UUID, name: String, description: String? = nil, imageUrl: String? = nil,
         cuisineType: String, rating: Double, deliveryTimeMin: Int,
-        deliveryFee: Double, minOrderAmount: Double, isActive: Bool,
+        deliveryFee: Double, minOrderAmount: Double,
         address: String? = nil, latitude: Double? = nil, longitude: Double? = nil,
         openingTime: String? = nil, closingTime: String? = nil,
         maxConcurrentOrders: Int? = nil, isAcceptingOrders: Bool = true,
@@ -50,7 +49,6 @@ public struct Restaurant: Codable, Identifiable, Hashable, Sendable {
         self.deliveryTimeMin = deliveryTimeMin
         self.deliveryFee = deliveryFee
         self.minOrderAmount = minOrderAmount
-        self.isActive = isActive
         self.address = address
         self.latitude = latitude
         self.longitude = longitude
@@ -70,7 +68,6 @@ public struct Restaurant: Codable, Identifiable, Hashable, Sendable {
         case deliveryTimeMin = "delivery_time_min"
         case deliveryFee = "delivery_fee"
         case minOrderAmount = "min_order_amount"
-        case isActive = "is_active"
         case address, latitude, longitude
         case openingTime = "opening_time"
         case closingTime = "closing_time"
