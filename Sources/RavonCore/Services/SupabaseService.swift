@@ -87,7 +87,6 @@ public final class SupabaseService {
     public func fetchRestaurants() async throws -> [Restaurant] {
         try await client.from("restaurants")
             .select()
-            .eq("is_active", value: true)
             .eq("restaurant_status", value: RestaurantStatus.active.rawValue)
             .order("rating", ascending: false)
             .execute()
