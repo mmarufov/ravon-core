@@ -12,6 +12,7 @@ public enum ServiceError: LocalizedError, Sendable {
     case restaurantClosed
     case restaurantNotAccepting
     case restaurantOverloaded
+    case restaurantOutOfHours
     case insufficientStock
     case cancelNotAllowed
     case merchantAlreadyHasRestaurant
@@ -19,6 +20,9 @@ public enum ServiceError: LocalizedError, Sendable {
     case imageTooLarge
     case unsupportedImageFormat
     case categoryNotEmpty
+    case minOrderNotMet(need: Double)
+    case scheduledTimeInvalid
+    case cartHasIssues(CartValidationResult)
 
     public var errorDescription: String? {
         switch self {
@@ -32,6 +36,7 @@ public enum ServiceError: LocalizedError, Sendable {
         case .restaurantClosed:              return "Ресторан сейчас закрыт"
         case .restaurantNotAccepting:        return "Ресторан не принимает заказы"
         case .restaurantOverloaded:          return "Ресторан перегружен заказами"
+        case .restaurantOutOfHours:          return "Ресторан сейчас не работает по расписанию"
         case .insufficientStock:             return "Недостаточно товара на складе"
         case .cancelNotAllowed:              return "Отмена невозможна — заказ уже забран курьером"
         case .merchantAlreadyHasRestaurant:  return "У вас уже есть ресторан"
@@ -39,6 +44,11 @@ public enum ServiceError: LocalizedError, Sendable {
         case .imageTooLarge:                 return "Изображение слишком большое (макс. 5 МБ)"
         case .unsupportedImageFormat:        return "Неподдерживаемый формат изображения"
         case .categoryNotEmpty:              return "Удалите все блюда из категории перед удалением"
+        case .minOrderNotMet(let need):      return "Минимальная сумма заказа: \(Int(need)) ₽"
+        case .scheduledTimeInvalid:          return "Выбранное время недоступно"
+        case .cartHasIssues(let r):
+            let msg = r.reason.localizedMessage
+            return msg.isEmpty ? "В корзине есть изменения" : msg
         }
     }
 }
@@ -84,6 +94,10 @@ public final class SupabaseService {
 
     // MARK: - Restaurants
 
+    /// Consumer feed: only `active` restaurants. Server view `restaurants_orderable` exposes
+    /// `is_orderable_now` so the consumer can render badges (open / out-of-hours / not-accepting)
+    /// without re-computing client-side. We still fetch all `active` rows so the feed shows
+    /// out-of-hours restaurants greyed-out (per UX matrix), with the schedule-for-later flow.
     public func fetchRestaurants() async throws -> [Restaurant] {
         try await client.from("restaurants")
             .select()
@@ -93,6 +107,8 @@ public final class SupabaseService {
             .value
     }
 
+    /// Single-restaurant fetch. Returns even paused/closed/soft-deleted rows so deep-links
+    /// and order history can render them — UI is responsible for showing the right state.
     public func fetchRestaurant(id: UUID) async throws -> Restaurant {
         try await client.from("restaurants")
             .select()
@@ -102,22 +118,53 @@ public final class SupabaseService {
             .value
     }
 
+    // MARK: - Orderability (server-truth)
+
+    public struct RestaurantOrderability: Decodable, Sendable {
+        public let isOrderableNow: Bool
+        public let reason: OrderabilityReason
+        public let opensAt: Date?
+
+        enum CodingKeys: String, CodingKey {
+            case isOrderableNow = "is_orderable_now"
+            case reason
+            case opensAt = "opens_at"
+        }
+    }
+
+    /// Lightweight RPC to check orderability without re-fetching the whole restaurant.
+    /// Used by consumer detail screen to render the bottom CTA state.
+    public func getRestaurantOrderability(restaurantId: UUID, at: Date? = nil) async throws -> RestaurantOrderability {
+        struct Params: Encodable {
+            let p_restaurant_id: UUID
+            let p_at: Date?
+        }
+        return try await client.rpc("get_restaurant_orderability", params: Params(
+            p_restaurant_id: restaurantId, p_at: at
+        )).execute().value
+    }
+
     // MARK: - Menu
 
+    /// Consumer view: only available, non-soft-deleted categories.
     public func fetchMenuCategories(restaurantId: UUID) async throws -> [MenuCategory] {
         try await client.from("menu_categories")
             .select()
             .eq("restaurant_id", value: restaurantId.uuidString)
+            .eq("is_available", value: true)
+            .is("deleted_at", value: nil)
             .order("sort_order")
             .execute()
             .value
     }
 
+    /// Consumer view: only available, non-soft-deleted items.
     public func fetchMenuItems(restaurantId: UUID) async throws -> [MenuItem] {
         try await client.from("menu_items")
             .select()
             .eq("restaurant_id", value: restaurantId.uuidString)
             .eq("is_available", value: true)
+            .is("deleted_at", value: nil)
             .order("sort_order")
             .execute()
             .value
@@ -196,12 +243,14 @@ public final class SupabaseService {
         public let p_address_id: UUID
         public let p_items: [OrderItemParam]
         public let p_notes: String?
+        public let p_scheduled_for: Date?
 
-        public init(p_restaurant_id: UUID, p_address_id: UUID, p_items: [OrderItemParam], p_notes: String?) {
+        public init(p_restaurant_id: UUID, p_address_id: UUID, p_items: [OrderItemParam], p_notes: String?, p_scheduled_for: Date? = nil) {
             self.p_restaurant_id = p_restaurant_id
             self.p_address_id = p_address_id
             self.p_items = p_items
             self.p_notes = p_notes
+            self.p_scheduled_for = p_scheduled_for
         }
     }
 
@@ -215,11 +264,14 @@ public final class SupabaseService {
         }
     }
 
+    /// Place an order. Pass `scheduledFor` (in the future, within next 7 days, within restaurant hours)
+    /// to create a `scheduled` order — held by the platform until activation.
     public func createOrder(
         restaurantId: UUID,
         addressId: UUID,
         items: [(menuItemId: UUID, quantity: Int)],
-        notes: String?
+        notes: String?,
+        scheduledFor: Date? = nil
     ) async throws -> UUID {
         let itemsParam = items.map { item in
             OrderItemParam(menu_item_id: item.menuItemId, quantity: item.quantity)
@@ -228,13 +280,38 @@ public final class SupabaseService {
             p_restaurant_id: restaurantId,
             p_address_id: addressId,
             p_items: itemsParam,
-            p_notes: notes
+            p_notes: notes,
+            p_scheduled_for: scheduledFor
         )
         let result: String = try await client.rpc("create_order", params: params).execute().value
         guard let uuid = UUID(uuidString: result) else {
             throw ServiceError.invalidResponse
         }
         return uuid
+    }
+
+    // MARK: - Cart validation (pre-checkout truth gate)
+
+    public struct ValidateCartParams: Encodable, Sendable {
+        public let p_restaurant_id: UUID
+        public let p_items: [OrderItemParam]
+        public let p_scheduled_for: Date?
+    }
+
+    /// Server-side validation of cart contents. Called inside the consumer's
+    /// confirm-tap loading screen before `createOrder`. Read-only, locks no rows,
+    /// idempotent. Returns a structured payload the UI can render diffs from.
+    public func validateCart(
+        restaurantId: UUID,
+        items: [(menuItemId: UUID, quantity: Int)],
+        scheduledFor: Date? = nil
+    ) async throws -> CartValidationResult {
+        let params = ValidateCartParams(
+            p_restaurant_id: restaurantId,
+            p_items: items.map { OrderItemParam(menu_item_id: $0.menuItemId, quantity: $0.quantity) },
+            p_scheduled_for: scheduledFor
+        )
+        return try await client.rpc("validate_cart", params: params).execute().value
     }
 
     // MARK: - Order Lifecycle (Merchant)
@@ -594,26 +671,11 @@ public final class SupabaseService {
             .execute()
     }
 
-    public func isRestaurantOpen(restaurantId: UUID) async throws -> Bool {
-        let hours = try await fetchRestaurantHours(restaurantId: restaurantId)
-        guard !hours.isEmpty else { return true } // No hours = always open
-
-        let now = Date()
-        let calendar = Calendar.current
-        // Swift .weekday: 1=Sunday, 2=Monday, ... 7=Saturday
-        // DB convention: 0=Sunday, 1=Monday, ... 6=Saturday
-        let dayOfWeek = calendar.component(.weekday, from: now) - 1
-
-        guard let todayHours = hours.first(where: { $0.dayOfWeek == dayOfWeek }) else {
-            return true // No entry for today = open
-        }
-        if todayHours.isClosed { return false }
-
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm:ss"
-        let currentTimeStr = formatter.string(from: now)
-        return currentTimeStr >= todayHours.openingTime && currentTimeStr <= todayHours.closingTime
-    }
+    /// Removed — was client-side using device local time vs DB strings (Asia/Dushanbe-naïve)
+    /// and didn't handle past-midnight ranges. Use `getRestaurantOrderability(restaurantId:at:)`
+    /// which calls the server `restaurant_is_orderable()` function (timezone-correct, hours +
+    /// status + accepting toggle in one call). For UI-only labels like "Откроется в 09:00",
+    /// use `RestaurantHours.nextOpenAt(from:)`.
 
     // MARK: - Modifiers
 
@@ -646,7 +708,8 @@ public final class SupabaseService {
 
     // MARK: - Merchant Menu Management
 
-    /// Fetch all menu items including unavailable ones (merchant view)
+    /// Fetch all menu items including unavailable AND soft-deleted ones (merchant view).
+    /// Merchant UI greys out soft-deleted rows and offers a restore action within the 30-day grace.
     public func fetchAllMenuItems(restaurantId: UUID) async throws -> [MenuItem] {
         try await client.from("menu_items")
             .select()
@@ -654,6 +717,25 @@ public final class SupabaseService {
             .order("sort_order")
             .execute()
             .value
+    }
+
+    /// Merchant view of categories (includes hidden + soft-deleted within grace).
+    public func fetchAllMenuCategories(restaurantId: UUID) async throws -> [MenuCategory] {
+        try await client.from("menu_categories")
+            .select()
+            .eq("restaurant_id", value: restaurantId.uuidString)
+            .order("sort_order")
+            .execute()
+            .value
+    }
+
+    /// Show/hide a category to consumers without deleting it. Items inside an unavailable
+    /// category are also hidden (consumer query filters categories first).
+    public func toggleMenuCategoryAvailability(id: UUID, isAvailable: Bool) async throws {
+        try await client.from("menu_categories")
+            .update(["is_available": AnyJSON.bool(isAvailable)])
+            .eq("id", value: id.uuidString)
+            .execute()
     }
 
     public func toggleMenuItemAvailability(id: UUID, isAvailable: Bool) async throws {
@@ -724,10 +806,22 @@ public final class SupabaseService {
     }
 
     public func toggleAcceptingOrders(restaurantId: UUID, accepting: Bool) async throws {
-        try await client.from("restaurants")
-            .update(["is_accepting_orders": AnyJSON.bool(accepting)])
-            .eq("id", value: restaurantId.uuidString)
-            .execute()
+        try await setAcceptingOrders(restaurantId: restaurantId, accepting: accepting, until: nil)
+    }
+
+    /// Set `is_accepting_orders` with an optional auto-resume time. When `until` is set,
+    /// a `pg_cron` job flips `is_accepting_orders` back to `true` and clears `accepting_orders_until`
+    /// at that time. Useful for "stop accepting until 21:00" — Tajikistan merchants will
+    /// otherwise forget to re-enable.
+    public func setAcceptingOrders(restaurantId: UUID, accepting: Bool, until: Date?) async throws {
+        struct Params: Encodable {
+            let p_restaurant_id: UUID
+            let p_accepting: Bool
+            let p_until: Date?
+        }
+        try await client.rpc("set_accepting_orders", params: Params(
+            p_restaurant_id: restaurantId, p_accepting: accepting, p_until: until
+        )).execute()
     }
 
     // MARK: - Chat Messages
@@ -927,17 +1021,27 @@ public final class SupabaseService {
             .execute()
     }
 
+    /// Soft-delete: sets `deleted_at`. Cron purges rows older than 30 days.
+    /// Pre-check: category must be empty of non-deleted items.
     public func deleteMenuCategory(id: UUID) async throws {
-        // Pre-check: category must be empty
         let items: [IdRow] = try await client.from("menu_items")
             .select("id")
             .eq("category_id", value: id.uuidString)
+            .is("deleted_at", value: nil)
             .limit(1)
             .execute()
             .value
         guard items.isEmpty else { throw ServiceError.categoryNotEmpty }
         try await client.from("menu_categories")
-            .delete()
+            .update(["deleted_at": AnyJSON.string(Self.isoFormatter.string(from: Date()))])
+            .eq("id", value: id.uuidString)
+            .execute()
+    }
+
+    /// Restore a soft-deleted category (reverses `deleteMenuCategory` if within 30-day grace).
+    public func restoreMenuCategory(id: UUID) async throws {
+        try await client.from("menu_categories")
+            .update(["deleted_at": AnyJSON.null])
             .eq("id", value: id.uuidString)
             .execute()
     }
@@ -953,9 +1057,21 @@ public final class SupabaseService {
             .value
     }
 
+    /// Soft-delete: sets `deleted_at`. The item disappears from consumer fetches
+    /// (`fetchMenuItems` filters `deleted_at IS NULL`) but remains for order history.
+    /// A daily cron hard-deletes rows where `deleted_at < now() - interval '30 days'`.
+    /// Order rows are protected by `ON DELETE SET NULL` + the `OrderItem` snapshot fields.
     public func deleteMenuItem(id: UUID) async throws {
         try await client.from("menu_items")
-            .delete()
+            .update(["deleted_at": AnyJSON.string(Self.isoFormatter.string(from: Date()))])
+            .eq("id", value: id.uuidString)
+            .execute()
+    }
+
+    /// Restore a soft-deleted menu item (reverses `deleteMenuItem` if within 30-day grace).
+    public func restoreMenuItem(id: UUID) async throws {
+        try await client.from("menu_items")
+            .update(["deleted_at": AnyJSON.null])
             .eq("id", value: id.uuidString)
             .execute()
     }

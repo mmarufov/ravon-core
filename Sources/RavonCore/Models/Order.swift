@@ -1,6 +1,7 @@
 import Foundation
 
 public enum OrderStatus: String, Codable, CaseIterable, Sendable {
+    case scheduled
     case created
     case accepted
     case preparing
@@ -19,6 +20,7 @@ public enum OrderStatus: String, Codable, CaseIterable, Sendable {
 
     public var displayName: String {
         switch self {
+        case .scheduled:                return "Запланирован"
         case .created:                  return "Создан"
         case .accepted:                 return "Принят"
         case .preparing:                return "Готовится"
@@ -70,8 +72,12 @@ public enum OrderStatus: String, Codable, CaseIterable, Sendable {
         }
     }
 
+    /// Scheduled orders are held by the platform until activation; not yet visible to couriers.
+    public var isScheduled: Bool { self == .scheduled }
+
     public var stepIndex: Int {
         switch self {
+        case .scheduled:                return -2
         case .created:                  return 0
         case .accepted:                 return 1
         case .preparing:                return 2
@@ -116,6 +122,7 @@ public struct Order: Codable, Identifiable, Sendable {
     public let deliveredAt: Date?
     public let acceptedAt: Date?
     public let rejectedAt: Date?
+    public let scheduledFor: Date?
 
     public init(
         id: UUID, userId: UUID, restaurantId: UUID,
@@ -128,7 +135,8 @@ public struct Order: Codable, Identifiable, Sendable {
         cancellationReason: String? = nil, cancelledBy: UUID? = nil,
         verificationCode: String? = nil, tipAmount: Double? = nil,
         pickedUpAt: Date? = nil, deliveredAt: Date? = nil,
-        acceptedAt: Date? = nil, rejectedAt: Date? = nil
+        acceptedAt: Date? = nil, rejectedAt: Date? = nil,
+        scheduledFor: Date? = nil
     ) {
         self.id = id
         self.userId = userId
@@ -155,6 +163,37 @@ public struct Order: Codable, Identifiable, Sendable {
         self.deliveredAt = deliveredAt
         self.acceptedAt = acceptedAt
         self.rejectedAt = rejectedAt
+        self.scheduledFor = scheduledFor
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(UUID.self, forKey: .id)
+        self.userId = try c.decode(UUID.self, forKey: .userId)
+        self.restaurantId = try c.decode(UUID.self, forKey: .restaurantId)
+        self.addressId = try c.decodeIfPresent(UUID.self, forKey: .addressId)
+        self.courierId = try c.decodeIfPresent(UUID.self, forKey: .courierId)
+        self.status = try c.decode(OrderStatus.self, forKey: .status)
+        self.subtotal = try c.decode(Double.self, forKey: .subtotal)
+        self.deliveryFee = try c.decode(Double.self, forKey: .deliveryFee)
+        self.total = try c.decode(Double.self, forKey: .total)
+        self.deliveryAddressSnapshot = try c.decodeIfPresent(AddressSnapshot.self, forKey: .deliveryAddressSnapshot)
+        self.notes = try c.decodeIfPresent(String.self, forKey: .notes)
+        self.createdAt = try c.decode(Date.self, forKey: .createdAt)
+        self.updatedAt = try c.decode(Date.self, forKey: .updatedAt)
+        self.restaurant = try c.decodeIfPresent(Restaurant.self, forKey: .restaurant)
+        self.orderItems = try c.decodeIfPresent([OrderItem].self, forKey: .orderItems)
+        self.estimatedDeliveryTime = try c.decodeIfPresent(Date.self, forKey: .estimatedDeliveryTime)
+        self.estimatedPrepTime = try c.decodeIfPresent(Int.self, forKey: .estimatedPrepTime)
+        self.cancellationReason = try c.decodeIfPresent(String.self, forKey: .cancellationReason)
+        self.cancelledBy = try c.decodeIfPresent(UUID.self, forKey: .cancelledBy)
+        self.verificationCode = try c.decodeIfPresent(String.self, forKey: .verificationCode)
+        self.tipAmount = try c.decodeIfPresent(Double.self, forKey: .tipAmount)
+        self.pickedUpAt = try c.decodeIfPresent(Date.self, forKey: .pickedUpAt)
+        self.deliveredAt = try c.decodeIfPresent(Date.self, forKey: .deliveredAt)
+        self.acceptedAt = try c.decodeIfPresent(Date.self, forKey: .acceptedAt)
+        self.rejectedAt = try c.decodeIfPresent(Date.self, forKey: .rejectedAt)
+        self.scheduledFor = try c.decodeIfPresent(Date.self, forKey: .scheduledFor)
     }
 
     enum CodingKeys: String, CodingKey {
@@ -182,19 +221,48 @@ public struct Order: Codable, Identifiable, Sendable {
         case deliveredAt = "delivered_at"
         case acceptedAt = "accepted_at"
         case rejectedAt = "rejected_at"
+        case scheduledFor = "scheduled_for"
+    }
+}
+
+public struct OrderItemModifierSnapshot: Codable, Hashable, Sendable {
+    public let groupName: String
+    public let optionName: String
+    public let priceAdjustment: Double
+
+    public init(groupName: String, optionName: String, priceAdjustment: Double) {
+        self.groupName = groupName
+        self.optionName = optionName
+        self.priceAdjustment = priceAdjustment
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case groupName = "group_name"
+        case optionName = "option_name"
+        case priceAdjustment = "price_adjustment"
     }
 }
 
 public struct OrderItem: Codable, Identifiable, Sendable {
     public let id: UUID
     public let orderId: UUID
-    public let menuItemId: UUID
+    /// FK to menu_items. NULLABLE — set NULL when the item is hard-deleted (post 30-day soft-delete grace).
+    /// UI must use the snapshot fields below, not look up the live row.
+    public let menuItemId: UUID?
     public let quantity: Int
     public let unitPrice: Double
     public let totalPrice: Double
     public let itemName: String
+    public let itemDescription: String?
+    public let itemImageUrl: String?
+    public let modifiersSnapshot: [OrderItemModifierSnapshot]
 
-    public init(id: UUID, orderId: UUID, menuItemId: UUID, quantity: Int, unitPrice: Double, totalPrice: Double, itemName: String) {
+    public init(
+        id: UUID, orderId: UUID, menuItemId: UUID?, quantity: Int,
+        unitPrice: Double, totalPrice: Double, itemName: String,
+        itemDescription: String? = nil, itemImageUrl: String? = nil,
+        modifiersSnapshot: [OrderItemModifierSnapshot] = []
+    ) {
         self.id = id
         self.orderId = orderId
         self.menuItemId = menuItemId
@@ -202,6 +270,23 @@ public struct OrderItem: Codable, Identifiable, Sendable {
         self.unitPrice = unitPrice
         self.totalPrice = totalPrice
         self.itemName = itemName
+        self.itemDescription = itemDescription
+        self.itemImageUrl = itemImageUrl
+        self.modifiersSnapshot = modifiersSnapshot
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(UUID.self, forKey: .id)
+        self.orderId = try c.decode(UUID.self, forKey: .orderId)
+        self.menuItemId = try c.decodeIfPresent(UUID.self, forKey: .menuItemId)
+        self.quantity = try c.decode(Int.self, forKey: .quantity)
+        self.unitPrice = try c.decode(Double.self, forKey: .unitPrice)
+        self.totalPrice = try c.decode(Double.self, forKey: .totalPrice)
+        self.itemName = try c.decode(String.self, forKey: .itemName)
+        self.itemDescription = try c.decodeIfPresent(String.self, forKey: .itemDescription)
+        self.itemImageUrl = try c.decodeIfPresent(String.self, forKey: .itemImageUrl)
+        self.modifiersSnapshot = try c.decodeIfPresent([OrderItemModifierSnapshot].self, forKey: .modifiersSnapshot) ?? []
     }
 
     enum CodingKeys: String, CodingKey {
@@ -212,6 +297,9 @@ public struct OrderItem: Codable, Identifiable, Sendable {
         case unitPrice = "unit_price"
         case totalPrice = "total_price"
         case itemName = "item_name"
+        case itemDescription = "item_description"
+        case itemImageUrl = "item_image_url"
+        case modifiersSnapshot = "modifiers_snapshot"
     }
 }
 

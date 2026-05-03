@@ -43,11 +43,37 @@ public struct MenuItemChangeEvent: Sendable {
     public let menuItemId: UUID
     public let restaurantId: UUID
     public let isAvailable: Bool
+    public let stockCount: Int?
+    public let deletedAt: Date?
 
-    public init(menuItemId: UUID, restaurantId: UUID, isAvailable: Bool) {
+    public init(menuItemId: UUID, restaurantId: UUID, isAvailable: Bool, stockCount: Int? = nil, deletedAt: Date? = nil) {
         self.menuItemId = menuItemId
         self.restaurantId = restaurantId
         self.isAvailable = isAvailable
+        self.stockCount = stockCount
+        self.deletedAt = deletedAt
+    }
+
+    public var isSoftDeleted: Bool { deletedAt != nil }
+}
+
+public struct RestaurantStatusEvent: Sendable {
+    public let restaurantId: UUID
+    public let restaurantStatus: RestaurantStatus
+    public let isAcceptingOrders: Bool
+    public let acceptingOrdersUntil: Date?
+
+    public init(restaurantId: UUID, restaurantStatus: RestaurantStatus, isAcceptingOrders: Bool, acceptingOrdersUntil: Date? = nil) {
+        self.restaurantId = restaurantId
+        self.restaurantStatus = restaurantStatus
+        self.isAcceptingOrders = isAcceptingOrders
+        self.acceptingOrdersUntil = acceptingOrdersUntil
+    }
+
+    /// Best-effort client hint — server `restaurant_is_orderable()` is the source of truth
+    /// (this can't compute hours without `restaurant_hours` rows).
+    public var isOrderableHint: Bool {
+        restaurantStatus == .active && isAcceptingOrders
     }
 }
 
@@ -67,12 +93,15 @@ public final class RealtimeService: ObservableObject {
     private var chatTask: Task<Void, Never>?
     private var availableOrdersChannel: RealtimeChannelV2?
     private var availableOrdersTask: Task<Void, Never>?
+    private var restaurantStatusChannel: RealtimeChannelV2?
+    private var restaurantStatusTask: Task<Void, Never>?
 
     @Published public private(set) var lastOrderChange: OrderChangeEvent?
     @Published public private(set) var lastMenuItemChange: MenuItemChangeEvent?
     @Published public private(set) var lastCourierLocationChange: CourierLocationEvent?
     @Published public private(set) var lastChatMessage: ChatMessageEvent?
     @Published public private(set) var lastAvailableOrderChange: OrderChangeEvent?
+    @Published public private(set) var lastRestaurantStatusChange: RestaurantStatusEvent?
 
     public init() {}
 
@@ -207,7 +236,10 @@ public final class RealtimeService: ObservableObject {
 
     // MARK: - Menu Item Subscriptions
 
-    /// Subscribe to menu item availability changes for a restaurant
+    /// Subscribe to menu item changes for a restaurant. Emits `MenuItemChangeEvent` on
+    /// every UPDATE — payload now carries `isAvailable`, `stockCount`, and `deletedAt`
+    /// so the consumer cart can grey out lines where stock dropped or the item was
+    /// soft-deleted in real time.
     public func subscribeToMenuChanges(restaurantId: UUID) async throws {
         await unsubscribeFromMenu()
         let channel = client.channel("menu-\(restaurantId.uuidString)")
@@ -228,10 +260,73 @@ public final class RealtimeService: ObservableObject {
                     .flatMap({ UUID(uuidString: $0) })
                 let isAvailable = change.record["is_available"]
                     .flatMap({ if case .bool(let b) = $0 { return b } else { return nil } })
+                let stockCount: Int? = change.record["stock_count"].flatMap {
+                    if case .integer(let i) = $0 { return i }
+                    if case .double(let d) = $0 { return Int(d) }
+                    return nil
+                }
+                let deletedAt: Date? = change.record["deleted_at"].flatMap {
+                    if case .string(let s) = $0 { return ISO8601DateFormatter().date(from: s) }
+                    return nil
+                }
                 if let itemId, let isAvailable {
                     await MainActor.run {
                         self.lastMenuItemChange = MenuItemChangeEvent(
-                            menuItemId: itemId, restaurantId: restaurantId, isAvailable: isAvailable
+                            menuItemId: itemId,
+                            restaurantId: restaurantId,
+                            isAvailable: isAvailable,
+                            stockCount: stockCount,
+                            deletedAt: deletedAt
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    public func unsubscribeFromRestaurantStatus() async {
+        restaurantStatusTask?.cancel()
+        restaurantStatusTask = nil
+        if let channel = restaurantStatusChannel {
+            await channel.unsubscribe()
+        }
+        restaurantStatusChannel = nil
+    }
+
+    /// Subscribe to restaurant-level status changes (status + accepting toggle + auto-resume time).
+    /// Used by consumer detail and cart screens to flip CTAs in real time. Cosmetic only —
+    /// confirm-tap still re-validates server-side via `validate_cart`.
+    public func subscribeToRestaurantStatus(restaurantId: UUID) async throws {
+        await unsubscribeFromRestaurantStatus()
+        let channel = client.channel("restaurant-status-\(restaurantId.uuidString)")
+        let changes = channel.postgresChange(
+            UpdateAction.self,
+            schema: "public",
+            table: "restaurants",
+            filter: .eq("id", value: restaurantId)
+        )
+        try await channel.subscribeWithError()
+        restaurantStatusChannel = channel
+
+        restaurantStatusTask = Task { [weak self] in
+            for await change in changes {
+                guard let self, !Task.isCancelled else { return }
+                let status = change.record["restaurant_status"]
+                    .flatMap({ if case .string(let s) = $0 { return s } else { return nil } })
+                    .flatMap({ RestaurantStatus(rawValue: $0) })
+                let accepting = change.record["is_accepting_orders"]
+                    .flatMap({ if case .bool(let b) = $0 { return b } else { return nil } })
+                let until: Date? = change.record["accepting_orders_until"].flatMap {
+                    if case .string(let s) = $0 { return ISO8601DateFormatter().date(from: s) }
+                    return nil
+                }
+                if let status, let accepting {
+                    await MainActor.run {
+                        self.lastRestaurantStatusChange = RestaurantStatusEvent(
+                            restaurantId: restaurantId,
+                            restaurantStatus: status,
+                            isAcceptingOrders: accepting,
+                            acceptingOrdersUntil: until
                         )
                     }
                 }

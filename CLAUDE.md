@@ -45,9 +45,11 @@ This package provides:
 
 ## Supabase Config
 
-- URL: `https://imcintoicxvmvzwpmxpr.supabase.co`
-- All 3 apps use the same Supabase project. Row-level security handles access per role.
-- Each app provides its own credentials via `RavonCore.configure()` at launch.
+- The Supabase project URL and keys must stay out of tracked docs and source.
+- All 3 apps use the same Supabase project. Each app provides its own credentials via `RavonCore.configure()` at launch.
+- Treat the anon key as public client config, not a secret. Any policy or RPC reachable with anon must be safe against direct API access outside the app.
+- Never commit or ship a `service_role` key. It must never appear in client code, mobile binaries, tracked docs, or repo config, including private repos.
+- Backend security verification must happen against the actual Supabase policies and grants, not just the Swift client. Local security reports in `.gstack/security-reports/` have previously flagged critical issues around anon-callable SECURITY DEFINER RPCs and over-broad UPDATE policies.
 
 ## Commit Messages
 

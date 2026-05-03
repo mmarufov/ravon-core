@@ -28,6 +28,7 @@ public struct Restaurant: Codable, Identifiable, Hashable, Sendable {
     public let closingTime: String?
     public let maxConcurrentOrders: Int?
     public let isAcceptingOrders: Bool
+    public let acceptingOrdersUntil: Date?
     public let ownerId: UUID?
     public let restaurantStatus: RestaurantStatus
 
@@ -38,6 +39,7 @@ public struct Restaurant: Codable, Identifiable, Hashable, Sendable {
         address: String? = nil, latitude: Double? = nil, longitude: Double? = nil,
         openingTime: String? = nil, closingTime: String? = nil,
         maxConcurrentOrders: Int? = nil, isAcceptingOrders: Bool = true,
+        acceptingOrdersUntil: Date? = nil,
         ownerId: UUID? = nil, restaurantStatus: RestaurantStatus = .active
     ) {
         self.id = id
@@ -56,8 +58,39 @@ public struct Restaurant: Codable, Identifiable, Hashable, Sendable {
         self.closingTime = closingTime
         self.maxConcurrentOrders = maxConcurrentOrders
         self.isAcceptingOrders = isAcceptingOrders
+        self.acceptingOrdersUntil = acceptingOrdersUntil
         self.ownerId = ownerId
         self.restaurantStatus = restaurantStatus
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(UUID.self, forKey: .id)
+        self.name = try c.decode(String.self, forKey: .name)
+        self.description = try c.decodeIfPresent(String.self, forKey: .description)
+        self.imageUrl = try c.decodeIfPresent(String.self, forKey: .imageUrl)
+        self.cuisineType = try c.decode(String.self, forKey: .cuisineType)
+        self.rating = try c.decode(Double.self, forKey: .rating)
+        self.deliveryTimeMin = try c.decode(Int.self, forKey: .deliveryTimeMin)
+        self.deliveryFee = try c.decode(Double.self, forKey: .deliveryFee)
+        self.minOrderAmount = try c.decode(Double.self, forKey: .minOrderAmount)
+        self.address = try c.decodeIfPresent(String.self, forKey: .address)
+        self.latitude = try c.decodeIfPresent(Double.self, forKey: .latitude)
+        self.longitude = try c.decodeIfPresent(Double.self, forKey: .longitude)
+        self.openingTime = try c.decodeIfPresent(String.self, forKey: .openingTime)
+        self.closingTime = try c.decodeIfPresent(String.self, forKey: .closingTime)
+        self.maxConcurrentOrders = try c.decodeIfPresent(Int.self, forKey: .maxConcurrentOrders)
+        self.isAcceptingOrders = try c.decodeIfPresent(Bool.self, forKey: .isAcceptingOrders) ?? true
+        self.acceptingOrdersUntil = try c.decodeIfPresent(Date.self, forKey: .acceptingOrdersUntil)
+        self.ownerId = try c.decodeIfPresent(UUID.self, forKey: .ownerId)
+        self.restaurantStatus = try c.decodeIfPresent(RestaurantStatus.self, forKey: .restaurantStatus) ?? .active
+    }
+
+    /// Best-effort client-side hint of whether the restaurant should appear orderable in UI.
+    /// Server is the source of truth — always re-validate via `validate_cart` / `create_order`.
+    /// This is only for optimistic CTA states (e.g. enabling/disabling buttons before server round-trip).
+    public var isOrderableHint: Bool {
+        restaurantStatus == .active && isAcceptingOrders
     }
 
     enum CodingKeys: String, CodingKey {
@@ -73,6 +106,7 @@ public struct Restaurant: Codable, Identifiable, Hashable, Sendable {
         case closingTime = "closing_time"
         case maxConcurrentOrders = "max_concurrent_orders"
         case isAcceptingOrders = "is_accepting_orders"
+        case acceptingOrdersUntil = "accepting_orders_until"
         case ownerId = "owner_id"
         case restaurantStatus = "restaurant_status"
     }
