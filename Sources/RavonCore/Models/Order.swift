@@ -14,9 +14,10 @@ public enum OrderStatus: String, Codable, CaseIterable, Sendable {
     case delivered
     case cancelled
     case rejected
-    case cancelledByCustomer = "cancelled_by_customer"
+    case cancelledByCustomer   = "cancelled_by_customer"
     case cancelledByRestaurant = "cancelled_by_restaurant"
-    case cancelledBySystem = "cancelled_by_system"
+    case cancelledBySystem     = "cancelled_by_system"
+    case cancelledByCourier    = "cancelled_by_courier"
 
     public var displayName: String {
         switch self {
@@ -36,17 +37,17 @@ public enum OrderStatus: String, Codable, CaseIterable, Sendable {
         case .cancelledByCustomer:      return "Отменён клиентом"
         case .cancelledByRestaurant:    return "Отменён рестораном"
         case .cancelledBySystem:        return "Отменён системой"
+        case .cancelledByCourier:       return "Отменён курьером"
         }
     }
 
-    public var isActive: Bool {
-        !isTerminal
-    }
+    public var isActive: Bool { !isTerminal }
 
     public var isTerminal: Bool {
         switch self {
         case .delivered, .cancelled, .rejected,
-             .cancelledByCustomer, .cancelledByRestaurant, .cancelledBySystem:
+             .cancelledByCustomer, .cancelledByRestaurant, .cancelledBySystem,
+             .cancelledByCourier:
             return true
         default:
             return false
@@ -55,13 +56,16 @@ public enum OrderStatus: String, Codable, CaseIterable, Sendable {
 
     public var isCancelled: Bool {
         switch self {
-        case .cancelled, .cancelledByCustomer, .cancelledByRestaurant, .cancelledBySystem:
+        case .cancelled, .cancelledByCustomer, .cancelledByRestaurant,
+             .cancelledBySystem, .cancelledByCourier:
             return true
         default:
             return false
         }
     }
 
+    /// Active hand-off statuses where consumer ↔ courier chat is INSERT-able.
+    /// (5-minute grace post-`delivered` is enforced by RLS at the DB layer.)
     public var isChatActive: Bool {
         switch self {
         case .assigned, .courierArrivedRestaurant, .pickedUp,
@@ -72,7 +76,22 @@ public enum OrderStatus: String, Codable, CaseIterable, Sendable {
         }
     }
 
-    /// Scheduled orders are held by the platform until activation; not yet visible to couriers.
+    /// Statuses where the consumer can still cancel before the food is in motion.
+    public var consumerCanCancel: Bool {
+        switch self {
+        case .scheduled, .created, .accepted, .preparing, .ready,
+             .assigned, .courierArrivedRestaurant:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Statuses where the courier can self-cancel via the whitelist (Workstream B).
+    public var courierCanCancel: Bool {
+        self == .assigned || self == .courierArrivedRestaurant
+    }
+
     public var isScheduled: Bool { self == .scheduled }
 
     public var stepIndex: Int {
@@ -89,7 +108,8 @@ public enum OrderStatus: String, Codable, CaseIterable, Sendable {
         case .courierArrivedCustomer:   return 8
         case .delivered:                return 9
         case .cancelled, .cancelledByCustomer,
-             .cancelledByRestaurant, .cancelledBySystem:
+             .cancelledByRestaurant, .cancelledBySystem,
+             .cancelledByCourier:
             return -1
         case .rejected:                 return -1
         }
@@ -115,14 +135,52 @@ public struct Order: Codable, Identifiable, Sendable {
     public let estimatedDeliveryTime: Date?
     public let estimatedPrepTime: Int?
     public let cancellationReason: String?
+    public let cancellationReasonCode: String?
     public let cancelledBy: UUID?
-    public let verificationCode: String?
+
+    /// Pickup verification code — shown to merchant + courier at the restaurant counter.
+    /// (Renamed from `verificationCode`. CodingKey unchanged: `verification_code`.)
+    public let pickupVerificationCode: String?
+
+    /// Delivery verification code — shown to consumer in tracking screen,
+    /// entered by courier in `courier_deliver_order` when delivery_mode == .handToMe.
+    public let deliveryVerificationCode: String?
+
     public let tipAmount: Double?
     public let pickedUpAt: Date?
     public let deliveredAt: Date?
     public let acceptedAt: Date?
     public let rejectedAt: Date?
     public let scheduledFor: Date?
+
+    /// Workstream A — SLA + ladder state.
+    public let claimedAt: Date?
+    public let arrivedAtRestaurantAt: Date?
+    public let arrivedAtCustomerAt: Date?
+    public let expectedActionBy: Date?
+    public let etaMinutes: Int?
+    public let courierDelayReasonCode: String?
+    public let courierDelayExplainedAt: Date?
+    public let courierNoShowWarnedAt: Date?
+    public let courierNoShowEscalatedAt: Date?
+
+    /// Workstream E — reassignment state.
+    public let reassignCount: Int
+    public let excludedCourierIds: [UUID]
+
+    /// Workstream J — delivery mode + photo proof.
+    public let deliveryMode: DeliveryMode
+    public let deliveryProofUrl: String?
+
+    /// Workstream I — customer no-show.
+    public let noShow: Bool
+    public let noShowStartedAt: Date?
+    public let restaurantDelayMin: Int
+
+    /// Backwards-compatibility alias for the renamed pickup code.
+    /// Marked deprecated; existing app callers can migrate to `pickupVerificationCode`.
+    @available(*, deprecated, renamed: "pickupVerificationCode")
+    public var verificationCode: String? { pickupVerificationCode }
 
     public init(
         id: UUID, userId: UUID, restaurantId: UUID,
@@ -132,11 +190,31 @@ public struct Order: Codable, Identifiable, Sendable {
         createdAt: Date, updatedAt: Date,
         restaurant: Restaurant? = nil, orderItems: [OrderItem]? = nil,
         estimatedDeliveryTime: Date? = nil, estimatedPrepTime: Int? = nil,
-        cancellationReason: String? = nil, cancelledBy: UUID? = nil,
-        verificationCode: String? = nil, tipAmount: Double? = nil,
+        cancellationReason: String? = nil,
+        cancellationReasonCode: String? = nil,
+        cancelledBy: UUID? = nil,
+        pickupVerificationCode: String? = nil,
+        deliveryVerificationCode: String? = nil,
+        tipAmount: Double? = nil,
         pickedUpAt: Date? = nil, deliveredAt: Date? = nil,
         acceptedAt: Date? = nil, rejectedAt: Date? = nil,
-        scheduledFor: Date? = nil
+        scheduledFor: Date? = nil,
+        claimedAt: Date? = nil,
+        arrivedAtRestaurantAt: Date? = nil,
+        arrivedAtCustomerAt: Date? = nil,
+        expectedActionBy: Date? = nil,
+        etaMinutes: Int? = nil,
+        courierDelayReasonCode: String? = nil,
+        courierDelayExplainedAt: Date? = nil,
+        courierNoShowWarnedAt: Date? = nil,
+        courierNoShowEscalatedAt: Date? = nil,
+        reassignCount: Int = 0,
+        excludedCourierIds: [UUID] = [],
+        deliveryMode: DeliveryMode = .handToMe,
+        deliveryProofUrl: String? = nil,
+        noShow: Bool = false,
+        noShowStartedAt: Date? = nil,
+        restaurantDelayMin: Int = 0
     ) {
         self.id = id
         self.userId = userId
@@ -156,14 +234,32 @@ public struct Order: Codable, Identifiable, Sendable {
         self.estimatedDeliveryTime = estimatedDeliveryTime
         self.estimatedPrepTime = estimatedPrepTime
         self.cancellationReason = cancellationReason
+        self.cancellationReasonCode = cancellationReasonCode
         self.cancelledBy = cancelledBy
-        self.verificationCode = verificationCode
+        self.pickupVerificationCode = pickupVerificationCode
+        self.deliveryVerificationCode = deliveryVerificationCode
         self.tipAmount = tipAmount
         self.pickedUpAt = pickedUpAt
         self.deliveredAt = deliveredAt
         self.acceptedAt = acceptedAt
         self.rejectedAt = rejectedAt
         self.scheduledFor = scheduledFor
+        self.claimedAt = claimedAt
+        self.arrivedAtRestaurantAt = arrivedAtRestaurantAt
+        self.arrivedAtCustomerAt = arrivedAtCustomerAt
+        self.expectedActionBy = expectedActionBy
+        self.etaMinutes = etaMinutes
+        self.courierDelayReasonCode = courierDelayReasonCode
+        self.courierDelayExplainedAt = courierDelayExplainedAt
+        self.courierNoShowWarnedAt = courierNoShowWarnedAt
+        self.courierNoShowEscalatedAt = courierNoShowEscalatedAt
+        self.reassignCount = reassignCount
+        self.excludedCourierIds = excludedCourierIds
+        self.deliveryMode = deliveryMode
+        self.deliveryProofUrl = deliveryProofUrl
+        self.noShow = noShow
+        self.noShowStartedAt = noShowStartedAt
+        self.restaurantDelayMin = restaurantDelayMin
     }
 
     public init(from decoder: Decoder) throws {
@@ -186,14 +282,39 @@ public struct Order: Codable, Identifiable, Sendable {
         self.estimatedDeliveryTime = try c.decodeIfPresent(Date.self, forKey: .estimatedDeliveryTime)
         self.estimatedPrepTime = try c.decodeIfPresent(Int.self, forKey: .estimatedPrepTime)
         self.cancellationReason = try c.decodeIfPresent(String.self, forKey: .cancellationReason)
+        self.cancellationReasonCode = try c.decodeIfPresent(String.self, forKey: .cancellationReasonCode)
         self.cancelledBy = try c.decodeIfPresent(UUID.self, forKey: .cancelledBy)
-        self.verificationCode = try c.decodeIfPresent(String.self, forKey: .verificationCode)
+        self.pickupVerificationCode = try c.decodeIfPresent(String.self, forKey: .pickupVerificationCode)
+        self.deliveryVerificationCode = try c.decodeIfPresent(String.self, forKey: .deliveryVerificationCode)
         self.tipAmount = try c.decodeIfPresent(Double.self, forKey: .tipAmount)
         self.pickedUpAt = try c.decodeIfPresent(Date.self, forKey: .pickedUpAt)
         self.deliveredAt = try c.decodeIfPresent(Date.self, forKey: .deliveredAt)
         self.acceptedAt = try c.decodeIfPresent(Date.self, forKey: .acceptedAt)
         self.rejectedAt = try c.decodeIfPresent(Date.self, forKey: .rejectedAt)
         self.scheduledFor = try c.decodeIfPresent(Date.self, forKey: .scheduledFor)
+        self.claimedAt = try c.decodeIfPresent(Date.self, forKey: .claimedAt)
+        self.arrivedAtRestaurantAt = try c.decodeIfPresent(Date.self, forKey: .arrivedAtRestaurantAt)
+        self.arrivedAtCustomerAt = try c.decodeIfPresent(Date.self, forKey: .arrivedAtCustomerAt)
+        self.expectedActionBy = try c.decodeIfPresent(Date.self, forKey: .expectedActionBy)
+        self.etaMinutes = try c.decodeIfPresent(Int.self, forKey: .etaMinutes)
+        self.courierDelayReasonCode = try c.decodeIfPresent(String.self, forKey: .courierDelayReasonCode)
+        self.courierDelayExplainedAt = try c.decodeIfPresent(Date.self, forKey: .courierDelayExplainedAt)
+        self.courierNoShowWarnedAt = try c.decodeIfPresent(Date.self, forKey: .courierNoShowWarnedAt)
+        self.courierNoShowEscalatedAt = try c.decodeIfPresent(Date.self, forKey: .courierNoShowEscalatedAt)
+        self.reassignCount = try c.decodeIfPresent(Int.self, forKey: .reassignCount) ?? 0
+        self.excludedCourierIds = try c.decodeIfPresent([UUID].self, forKey: .excludedCourierIds) ?? []
+        self.deliveryMode = try c.decodeIfPresent(DeliveryMode.self, forKey: .deliveryMode) ?? .handToMe
+        self.deliveryProofUrl = try c.decodeIfPresent(String.self, forKey: .deliveryProofUrl)
+        self.noShow = try c.decodeIfPresent(Bool.self, forKey: .noShow) ?? false
+        self.noShowStartedAt = try c.decodeIfPresent(Date.self, forKey: .noShowStartedAt)
+        self.restaurantDelayMin = try c.decodeIfPresent(Int.self, forKey: .restaurantDelayMin) ?? 0
+    }
+
+    /// Live computed: server SLA breached AND courier hasn't explained.
+    public var delayWarningActive: Bool {
+        guard let due = expectedActionBy else { return false }
+        if courierDelayExplainedAt != nil { return false }
+        return due < Date()
     }
 
     enum CodingKeys: String, CodingKey {
@@ -214,14 +335,33 @@ public struct Order: Codable, Identifiable, Sendable {
         case estimatedDeliveryTime = "estimated_delivery_time"
         case estimatedPrepTime = "estimated_prep_time"
         case cancellationReason = "cancellation_reason"
+        case cancellationReasonCode = "cancellation_reason_code"
         case cancelledBy = "cancelled_by"
-        case verificationCode = "verification_code"
+        // Note: column `verification_code` IS the pickup code; we map to the new Swift name.
+        case pickupVerificationCode = "verification_code"
+        case deliveryVerificationCode = "delivery_verification_code"
         case tipAmount = "tip_amount"
         case pickedUpAt = "picked_up_at"
         case deliveredAt = "delivered_at"
         case acceptedAt = "accepted_at"
         case rejectedAt = "rejected_at"
         case scheduledFor = "scheduled_for"
+        case claimedAt = "claimed_at"
+        case arrivedAtRestaurantAt = "arrived_at_restaurant_at"
+        case arrivedAtCustomerAt = "arrived_at_customer_at"
+        case expectedActionBy = "expected_action_by"
+        case etaMinutes = "eta_minutes"
+        case courierDelayReasonCode = "courier_delay_reason_code"
+        case courierDelayExplainedAt = "courier_delay_explained_at"
+        case courierNoShowWarnedAt = "courier_no_show_warned_at"
+        case courierNoShowEscalatedAt = "courier_no_show_escalated_at"
+        case reassignCount = "reassign_count"
+        case excludedCourierIds = "excluded_courier_ids"
+        case deliveryMode = "delivery_mode"
+        case deliveryProofUrl = "delivery_proof_url"
+        case noShow = "no_show"
+        case noShowStartedAt = "no_show_started_at"
+        case restaurantDelayMin = "restaurant_delay_min"
     }
 }
 
