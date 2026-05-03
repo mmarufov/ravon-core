@@ -23,6 +23,19 @@ public enum ServiceError: LocalizedError, Sendable {
     case minOrderNotMet(need: Double)
     case scheduledTimeInvalid
     case cartHasIssues(CartValidationResult)
+    // Umbrella II — courier hardening
+    case cancelAfterPickupNotAllowed
+    case cannotCancelPostPickup
+    case orderNoLongerPickupable
+    case courierBusy
+    case courierMustBeOnline
+    case courierSuspended(until: Date?)
+    case courierExcluded
+    case courierCancelCooldown(recentCancels: Int)
+    case wrongDeliveryCode
+    case missingProofImage
+    case invalidReasonCode(String)
+    case accuracyTooLow(meters: Double)
 
     public var errorDescription: String? {
         switch self {
@@ -49,6 +62,67 @@ public enum ServiceError: LocalizedError, Sendable {
         case .cartHasIssues(let r):
             let msg = r.reason.localizedMessage
             return msg.isEmpty ? "В корзине есть изменения" : msg
+        case .cancelAfterPickupNotAllowed:   return "Заказ уже в пути — отмена недоступна, обратитесь в поддержку"
+        case .cannotCancelPostPickup:        return "Доставка началась. Используйте «Сообщить о проблеме»"
+        case .orderNoLongerPickupable:       return "Заказ больше недоступен"
+        case .courierBusy:                   return "У вас уже есть активная доставка"
+        case .courierMustBeOnline:           return "Включите статус «На линии» перед взятием заказа"
+        case .courierSuspended(let until):
+            if let u = until {
+                let f = DateFormatter()
+                f.dateFormat = "HH:mm"
+                return "Аккаунт временно приостановлен до \(f.string(from: u))"
+            }
+            return "Аккаунт временно приостановлен"
+        case .courierExcluded:               return "Этот заказ для вас недоступен"
+        case .courierCancelCooldown(let n):  return "Слишком много отмен (\(n) за 24ч). Возьмите паузу."
+        case .wrongDeliveryCode:             return "Неверный код от клиента"
+        case .missingProofImage:             return "Сделайте фото у двери для подтверждения"
+        case .invalidReasonCode(let c):      return "Неподдерживаемая причина: \(c)"
+        case .accuracyTooLow(_):             return "Слабый сигнал GPS — обновите местоположение"
+        }
+    }
+
+    /// Best-effort decoder: maps a Supabase/PostgREST error to a typed
+    /// `ServiceError` by inspecting the structured DETAIL emitted by our
+    /// SECURITY DEFINER RPCs (`USING DETAIL = jsonb_build_object('reason', X)`).
+    /// Returns nil when nothing matches.
+    public static func from(serverError error: Error) -> ServiceError? {
+        // The Supabase Swift SDK exposes the message and a JSON-string `detail`
+        // on PostgrestError. Normalise common JSON escapes so a single regex
+        // works whether the detail comes through pretty-printed, escaped, or
+        // wrapped in NSError's description format.
+        let raw = String(describing: error)
+        let normalized = raw.replacingOccurrences(of: "\\\"", with: "\"")
+        // Search for "reason":"<KIND>" — kind is uppercase letters + underscores.
+        let pattern = #""reason"\s*:\s*"([A-Z_]+)""#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: normalized, range: NSRange(normalized.startIndex..., in: normalized)),
+              match.numberOfRanges >= 2,
+              let captureRange = Range(match.range(at: 1), in: normalized) else {
+            return nil
+        }
+        let kind = String(normalized[captureRange])
+        switch kind {
+        case "CANCEL_AFTER_PICKUP_NOT_ALLOWED":     return .cancelAfterPickupNotAllowed
+        case "CANNOT_CANCEL_POST_PICKUP":           return .cannotCancelPostPickup
+        case "ORDER_NO_LONGER_PICKUPABLE":          return .orderNoLongerPickupable
+        case "COURIER_ALREADY_HAS_ACTIVE_ORDER":    return .courierBusy
+        case "COURIER_MUST_BE_ONLINE":              return .courierMustBeOnline
+        case "COURIER_SUSPENDED":                   return .courierSuspended(until: nil)
+        case "COURIER_EXCLUDED_FROM_ORDER":         return .courierExcluded
+        case "COURIER_CANCEL_COOLDOWN":             return .courierCancelCooldown(recentCancels: 3)
+        case "WRONG_DELIVERY_CODE":                 return .wrongDeliveryCode
+        case "MISSING_PROOF_IMAGE":                 return .missingProofImage
+        case "INVALID_REASON_CODE":                 return .invalidReasonCode("")
+        case "ACCURACY_TOO_LOW":                    return .accuracyTooLow(meters: 0)
+        case "INVALID_VERIFICATION_CODE":           return .invalidVerificationCode
+        case "ORDER_NOT_FOUND":                     return .orderNotFound
+        case "ORDER_ALREADY_TERMINAL":              return .invalidStatusTransition
+        case "INVALID_STATUS_TRANSITION":           return .invalidStatusTransition
+        case "UNAUTHORIZED":                        return .unauthorized
+        case "NOT_AUTHENTICATED":                   return .notAuthenticated
+        default:                                    return nil
         }
     }
 }
@@ -379,10 +453,10 @@ public final class SupabaseService {
         try await client.rpc("courier_arrived_restaurant", params: Params(p_order_id: orderId)).execute()
     }
 
-    public func pickUpOrder(orderId: UUID, verificationCode: String) async throws {
+    public func pickUpOrder(orderId: UUID, pickupCode: String) async throws {
         struct Params: Encodable { let p_order_id: UUID; let p_verification_code: String }
         try await client.rpc("courier_pickup_order", params: Params(
-            p_order_id: orderId, p_verification_code: verificationCode
+            p_order_id: orderId, p_verification_code: pickupCode
         )).execute()
     }
 
@@ -396,9 +470,161 @@ public final class SupabaseService {
         try await client.rpc("courier_arrived_at_customer", params: Params(p_order_id: orderId)).execute()
     }
 
-    public func deliverOrder(orderId: UUID) async throws {
+    /// Mark the order as delivered.
+    /// - When `deliveryMode == .handToMe`: pass `deliveryCode` (the consumer's
+    ///   `delivery_verification_code`). Server matches it; mismatch → `.wrongDeliveryCode`.
+    /// - When `deliveryMode == .leaveAtDoor`: pass `proofUrl` (Supabase Storage URL
+    ///   to a photo in the `delivery-proofs` bucket). Missing → `.missingProofImage`.
+    public func deliverOrder(
+        orderId: UUID,
+        deliveryCode: String? = nil,
+        proofUrl: String? = nil
+    ) async throws {
+        struct Params: Encodable {
+            let p_order_id: UUID
+            let p_delivery_code: String?
+            let p_delivery_proof_url: String?
+        }
+        try await client.rpc("courier_deliver_order", params: Params(
+            p_order_id: orderId, p_delivery_code: deliveryCode, p_delivery_proof_url: proofUrl
+        )).execute()
+    }
+
+    // MARK: - Order Lifecycle (Courier — cancellation + escalation)
+
+    /// Self-cancel from a courier (pre-pickup whitelist only). Server returns the order
+    /// to the available pool when the reason is restaurant-related; otherwise marks it
+    /// `cancelled_by_courier` (terminal). Earnings tier credited per Workstream G.
+    public func cancelOrderByCourier(orderId: UUID, reason: CancellationReason) async throws {
+        guard CancellationReason.courierAllowed.contains(reason) else {
+            throw ServiceError.invalidReasonCode(reason.rawValue)
+        }
+        struct Params: Encodable { let p_order_id: UUID; let p_reason_code: String }
+        try await client.rpc("cancel_order_by_courier", params: Params(
+            p_order_id: orderId, p_reason_code: reason.rawValue
+        )).execute()
+    }
+
+    /// Post-pickup: courier cannot cancel, but can report a problem.
+    /// Pauses SLA monitoring + posts a system message to the consumer chat.
+    /// Order status is unchanged — support handles it.
+    public func reportProblemPostPickup(
+        orderId: UUID,
+        reason: CancellationReason,
+        freeForm: String? = nil
+    ) async throws {
+        struct Params: Encodable {
+            let p_order_id: UUID
+            let p_reason_code: String
+            let p_free_form: String?
+        }
+        try await client.rpc("report_problem_post_pickup", params: Params(
+            p_order_id: orderId, p_reason_code: reason.rawValue, p_free_form: freeForm
+        )).execute()
+    }
+
+    /// Courier responds to a delay banner with a structured reason; server
+    /// extends `expected_action_by` by 5 min and posts a chat note for the consumer.
+    public func explainDelay(
+        orderId: UUID,
+        reason: CourierDelayReason,
+        freeForm: String? = nil
+    ) async throws {
+        struct Params: Encodable {
+            let p_order_id: UUID
+            let p_reason_code: String
+            let p_free_form: String?
+        }
+        try await client.rpc("courier_explain_delay", params: Params(
+            p_order_id: orderId, p_reason_code: reason.rawValue, p_free_form: freeForm
+        )).execute()
+    }
+
+    /// Customer not opening at the door — server starts a 5-min countdown after
+    /// which the order is auto-marked `delivered` with `no_show=true` (Workstream I).
+    public func reportCustomerNoShow(orderId: UUID) async throws {
         struct Params: Encodable { let p_order_id: UUID }
-        try await client.rpc("courier_deliver_order", params: Params(p_order_id: orderId)).execute()
+        try await client.rpc("courier_report_customer_no_show",
+                             params: Params(p_order_id: orderId)).execute()
+    }
+
+    /// Courier at restaurant — restaurant is delaying. Extends SLA by N minutes,
+    /// up to a cumulative cap of 30 min after which order auto-cancels with 50% earning.
+    public func reportRestaurantDelay(orderId: UUID, extraMinutes: Int) async throws {
+        struct Params: Encodable {
+            let p_order_id: UUID
+            let p_extra_minutes: Int
+        }
+        try await client.rpc("courier_report_restaurant_delay", params: Params(
+            p_order_id: orderId, p_extra_minutes: extraMinutes
+        )).execute()
+    }
+
+    /// Rate-limited heartbeat upsert (≥1 sec apart). The server applies an anti-stationary
+    /// filter (only updates `last_moved_at` when the new fix is > 25m from the previous).
+    /// Clients should call this from the `CourierLocationStreamer` actor.
+    public func updateCourierHeartbeat(
+        latitude: Double,
+        longitude: Double,
+        accuracyMeters: Double? = nil,
+        heading: Double? = nil,
+        speed: Double? = nil
+    ) async throws {
+        struct Params: Encodable {
+            let p_latitude: Double
+            let p_longitude: Double
+            let p_accuracy_meters: Double?
+            let p_heading: Double?
+            let p_speed: Double?
+        }
+        try await client.rpc("update_courier_heartbeat", params: Params(
+            p_latitude: latitude, p_longitude: longitude,
+            p_accuracy_meters: accuracyMeters, p_heading: heading, p_speed: speed
+        )).execute()
+    }
+
+    /// Read the rolling ETA + escalation-ladder hint for an order.
+    /// Used by both courier (to know if delay banner is active) and consumer
+    /// (to render "Курьер задерживается" + "Откроется в HH:mm" chips).
+    public func fetchOrderEta(orderId: UUID) async throws -> OrderEta {
+        try await client.from("orders")
+            .select("id,eta_minutes,expected_action_by,courier_delay_reason_code,courier_delay_explained_at,courier_no_show_warned_at,courier_no_show_escalated_at,status")
+            .eq("id", value: orderId.uuidString)
+            .single()
+            .execute()
+            .value
+    }
+
+    /// How many self-cancels in the last 24h, and when the cooldown lifts.
+    /// Used by courier UI to grey out the "Отменить заказ" button.
+    public func fetchCancellationCooldownStatus() async throws -> (recentCancels: Int, cooldownUntil: Date?) {
+        guard let uid = AuthService.shared.userId else { throw ServiceError.notAuthenticated }
+        struct Row: Decodable { let created_at: Date }
+        let rows: [Row] = try await client.from("courier_cancellation_log")
+            .select("created_at")
+            .eq("courier_id", value: uid.uuidString)
+            .gte("created_at", value: Self.isoFormatter.string(from: Date().addingTimeInterval(-86400)))
+            .order("created_at", ascending: false)
+            .execute()
+            .value
+        let count = rows.count
+        guard count >= 3, let oldest = rows.last else { return (count, nil) }
+        return (count, oldest.created_at.addingTimeInterval(86400))
+    }
+
+    /// Upload a JPEG photo to the `delivery-proofs` bucket under
+    /// `<order_id>/<courier_id>-<unix_ts>.jpg`. Returns the public URL.
+    /// Caller is responsible for ≤ 500 KB validation (server-side check is added in v2).
+    public func uploadDeliveryProof(orderId: UUID, jpegData: Data) async throws -> String {
+        guard let uid = AuthService.shared.userId else { throw ServiceError.notAuthenticated }
+        guard jpegData.count <= 500 * 1024 else { throw ServiceError.imageTooLarge }
+        let ts = Int(Date().timeIntervalSince1970)
+        let path = "\(orderId.uuidString)/\(uid.uuidString)-\(ts).jpg"
+        _ = try await client.storage.from("delivery-proofs")
+            .upload(path, data: jpegData, options: FileOptions(contentType: "image/jpeg", upsert: true))
+        // Return the public URL (bucket is private — apps use signed URLs in v2; for now
+        // the path is what we stamp on orders.delivery_proof_url).
+        return path
     }
 
     // MARK: - Order Lifecycle (Consumer)
