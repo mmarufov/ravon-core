@@ -44,6 +44,7 @@ final class ChatRLSCodingTests: XCTestCase {
           "id": "11111111-1111-1111-1111-111111111111",
           "order_id": "22222222-2222-2222-2222-222222222222",
           "sender_id": "00000000-0000-0000-0000-000000000000",
+          "sender_role": "system",
           "body": "Курьер не отвечает, мы пытаемся с ним связаться.",
           "read_at": null,
           "created_at": "2026-05-03T10:32:00Z"
@@ -54,5 +55,26 @@ final class ChatRLSCodingTests: XCTestCase {
         let msg = try decoder.decode(ChatMessage.self, from: json)
         XCTAssertNil(msg.readAt)
         XCTAssertFalse(msg.isRead)
+        XCTAssertEqual(msg.senderRole, .system)
+        XCTAssertTrue(msg.isSystem)
+    }
+
+    func test_chatMessage_decodes_legacyRowWithoutSenderRole() throws {
+        // Pre-migration-15 rows had no sender_role column.
+        let json = #"""
+        {
+          "id": "11111111-1111-1111-1111-111111111111",
+          "order_id": "22222222-2222-2222-2222-222222222222",
+          "sender_id": "33333333-3333-3333-3333-333333333333",
+          "body": "Когда привезёте?",
+          "read_at": null,
+          "created_at": "2026-04-15T10:00:00Z"
+        }
+        """#.data(using: .utf8)!
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let msg = try decoder.decode(ChatMessage.self, from: json)
+        XCTAssertNil(msg.senderRole)
+        XCTAssertFalse(msg.isSystem)
     }
 }
