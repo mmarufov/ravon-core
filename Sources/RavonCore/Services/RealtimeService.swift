@@ -448,7 +448,12 @@ public final class RealtimeService: ObservableObject {
                 let senderId = change.record["sender_id"]
                     .flatMap({ if case .string(let s) = $0 { return s } else { return nil } })
                     .flatMap({ UUID(uuidString: $0) })
+                let senderRole = change.record["sender_role"]
+                    .flatMap({ if case .string(let s) = $0 { return s } else { return nil } })
+                    .flatMap({ ChatRole(rawValue: $0) })
                 let body = change.record["body"]
+                    .flatMap({ if case .string(let s) = $0 { return s } else { return nil } })
+                let readAtStr = change.record["read_at"]
                     .flatMap({ if case .string(let s) = $0 { return s } else { return nil } })
                 let createdAtStr = change.record["created_at"]
                     .flatMap({ if case .string(let s) = $0 { return s } else { return nil } })
@@ -456,11 +461,15 @@ public final class RealtimeService: ObservableObject {
                 if let id, let senderId, let body {
                     let createdAt = createdAtStr
                         .flatMap({ ISO8601DateFormatter().date(from: $0) }) ?? Date()
+                    let readAt = readAtStr
+                        .flatMap({ ISO8601DateFormatter().date(from: $0) })
                     let message = ChatMessage(
                         id: id,
                         orderId: orderId,
                         senderId: senderId,
+                        senderRole: senderRole,
                         body: body,
+                        readAt: readAt,
                         createdAt: createdAt
                     )
                     await MainActor.run {
