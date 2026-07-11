@@ -8,3 +8,15 @@ DerivedData/
 .netrc
 .context/
 .gstack/
+
+# Secrets & local config — never commit credentials
+.env
+.env.*
+*.env
+Secrets.plist
+Secrets.swift
+Config.local.xcconfig
+*.local.xcconfig
+GoogleService-Info.plist
+service_role*
+*service_role*
