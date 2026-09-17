@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build & test (Swift ${{ matrix.swift }})
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        swift: ["6.0"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Show toolchain
+        run: swift --version
+
+      # SPM's build + resolved-dependency cache. Keyed on the manifest so a dependency
+      # bump invalidates it, which is what caught the three apps drifting onto three
+      # different Supabase SDK versions.
+      - name: Cache SwiftPM
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: ${{ runner.os }}-spm-${{ hashFiles('Package.swift', 'Package.resolved') }}
+          restore-keys: ${{ runner.os }}-spm-
+
+      - name: Build
+        run: swift build --build-tests
+
+      - name: Test
+        run: swift test --skip-build
+
+  lifecycle-invariants:
+    name: Order lifecycle invariants
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo xcode-select -s /Applications/Xcode.app
+      # Run the state-machine property suite as its own required check. These prove
+      # liveness and visibility properties of the order graph; a regression here is a
+      # correctness bug in the marketplace, not a flaky test.
+      - name: Property-based lifecycle invariants
+        run: swift test --filter 'OrderLifecycle'
+
+  dispatch-quality:
+    name: Dispatch quality (simulation)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo xcode-select -s /Applications/Xcode.app
+      # Runs the marketplace simulator across 30 seeds and asserts batch matching still
+      # beats greedy FCFS. A regression here means dispatch got worse for real couriers,
+      # which no unit test would catch.
+      - name: Dispatch simulation regression
+        run: swift test --filter 'Dispatch|Hungarian'
+
+  schema-drift:
+    name: Schema drift (Swift ↔ SQL)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Swift CodingKeys must match the columns the migrations create. A mismatch is
+      # not a compile error and not a test failure — it is a decode crash in a shipped
+      # iOS app. Fails only on drift provable from the repo; unverifiable findings are
+      # reported without failing, so the gate stays trustworthy.
+      - name: Schema drift check
+        run: python3 scripts/schema_drift.py
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # A service_role key in a client binary would be a full database compromise.
+      # Fail the build rather than rely on review catching it.
+      # Decodes every JWT in tracked files and inspects the `role` claim, rather
+      # than grepping for a word that legitimately appears in .gitignore and docs.
+      - name: Reject service_role keys and Supabase PATs
+        run: python3 scripts/scan_secrets.py .

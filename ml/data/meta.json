@@ -1,0 +1,57 @@
+{
+  "cityCenterLat" : 38.5598,
+  "cityCenterLon" : 68.787,
+  "cityRadiusKm" : 6,
+  "courierCount" : 24,
+  "dayCount" : 200,
+  "deliveredRows" : 46329,
+  "dispatchIntervalSeconds" : 30,
+  "dispatcher" : "optimal-batch",
+  "durationMinutes" : 180,
+  "generator" : "ml\/export\/main.swift (RavonCore MarketplaceSimulator)",
+  "latent" : {
+    "courierSpeedSpread" : 0.3,
+    "prepNoiseSigmaMinutes" : 3,
+    "restaurantPrepBiasSigmaMinutes" : 4,
+    "trafficAmplitude" : 0.35,
+    "trafficPeriodMinutes" : 90
+  },
+  "naiveEtaChecks" : [
+    {
+      "biasMinutes" : 36.5580647785861,
+      "delivered" : 7010,
+      "label" : "reference config (240 orders \/ 180 min \/ 24 couriers), seeds 1-30, latent=realistic",
+      "maeMinutes" : 36.98447644356234,
+      "meanActualMinutes" : 67.30037499196803,
+      "meanNaiveMinutes" : 30.742310213381987,
+      "sdMinutes" : 50.500491015019904,
+      "seeds" : 30
+    },
+    {
+      "biasMinutes" : 23.44948121821618,
+      "delivered" : 7200,
+      "label" : "reference config (240 orders \/ 180 min \/ 24 couriers), seeds 1-30, latent=none",
+      "maeMinutes" : 23.44948121821618,
+      "meanActualMinutes" : 54.48717954867042,
+      "meanNaiveMinutes" : 31.037698330454102,
+      "sdMinutes" : 37.89247575537956,
+      "seeds" : 30
+    },
+    {
+      "biasMinutes" : 36.89437777058368,
+      "delivered" : 46329,
+      "label" : "export config == default config, all 200 exported days, latent=realistic",
+      "maeMinutes" : 37.35646253353398,
+      "meanActualMinutes" : 67.60261106112357,
+      "meanNaiveMinutes" : 30.708233290539763,
+      "sdMinutes" : 50.77037423326299,
+      "seeds" : 200
+    }
+  ],
+  "nominalSpeedKmh" : 18,
+  "orderCountPerDay" : 240,
+  "restaurantCount" : 12,
+  "rows" : 48000,
+  "serviceDayStartHour" : 11,
+  "zoneDivisions" : 2
+}

@@ -1,328 +1,339 @@
-<!--
-  Drop a logo here to complete the header (the reference repos lead with one):
-  put the file at docs/logo.png and uncomment the block below.
+# Ravon
 
-  <p align="center">
-    <img src="docs/logo.png" alt="Ravon" width="140" />
-  </p>
--->
+A three-sided food-delivery marketplace for Dushanbe, Tajikistan — consumer, merchant and
+courier iOS apps over one shared Swift package, a PostgreSQL data model, and a dispatch
+engine that assigns couriers to orders as a minimum-cost matching problem rather than a
+first-come-first-served job board. This repository is `RavonCore`: the shared package, the
+dispatch engine and its evaluation harness, the order lifecycle model, and the CI gates.
+The service tier is **currently being extracted to Kotlin/gRPC** and does not exist yet.
 
-<h1 align="center">Ravon</h1>
-
-<p align="center">
-  <em>A three-sided food-delivery platform for Tajikistan — consumer, merchant, and courier apps sharing one native Swift core, wired to a single <a href="https://supabase.com">Supabase</a> backend with realtime order tracking, on-device battery-aware location streaming, and DoorDash-style email-OTP auth.</em>
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Swift-5.9%2B-orange.svg?logo=swift" alt="Swift 5.9+" />
-  <img src="https://img.shields.io/badge/Platforms-iOS%2017%2B%20%7C%20macOS%2014%2B-blue.svg" alt="Platforms" />
-  <img src="https://img.shields.io/badge/SwiftPM-compatible-brightgreen.svg?logo=swift" alt="SwiftPM" />
-  <img src="https://img.shields.io/badge/Backend-Supabase-3ECF8E.svg?logo=supabase" alt="Supabase" />
-  <img src="https://img.shields.io/badge/Tests-73%20unit-success.svg" alt="73 tests" />
-</p>
-
-<!--
-  Screenshot showcase (mirrors the reference repos). Add real captures to docs/
-  and uncomment. Three columns, one per app, keeps the three-sided story visible.
-
-  <table>
-    <tr>
-      <td width="33%"><img src="docs/consumer.png" /></td>
-      <td width="33%"><img src="docs/merchant.png" /></td>
-      <td width="33%"><img src="docs/courier.png" /></td>
-    </tr>
-    <tr align="center">
-      <td>Consumer — browse, order, track, chat.</td>
-      <td>Merchant — menu, hours, order queue.</td>
-      <td>Courier — claim, navigate, get paid.</td>
-    </tr>
-  </table>
--->
+The interesting part of a delivery marketplace is not the CRUD. It is deciding which
+courier gets which order, proving that decision is correct, and measuring whether it is
+actually better — under conditions you can state.
 
 ---
 
-**This repository is `RavonCore`** — the shared Swift Package that all three Ravon apps are built on. It's the single, tested source of truth for the models, authentication, realtime, and backend access every app needs. The three apps live in their own repositories; this is their spine.
+## Measured results
 
-## Table of Contents
+Every number below was produced by running the code in this repository. Each is stated
+with the caveat that bounds it, because a number without its conditions is not a result.
 
-- [The idea](#the-idea)
-- [Why it's interesting](#why-its-interesting)
-- [Architecture](#architecture)
-- [Repo layout](#repo-layout)
-- [Local setup](#local-setup)
-- [How an order moves through the system](#how-an-order-moves-through-the-system)
-- [Public API surface](#public-api-surface)
-- [Design system](#design-system)
-- [Security model](#security-model)
-- [Testing](#testing)
-- [What's intentionally out of scope](#whats-intentionally-out-of-scope)
-- [Conventions](#conventions)
-- [Credits](#credits)
+### Dispatch: minimum-cost matching vs. greedy FCFS
 
-## The idea
+30 seeds · 12 couriers · 240 orders · 180-minute window, in a deterministic simulator:
 
-A hungry customer in Dushanbe opens the **Ravon consumer app**, browses nearby restaurants, builds a cart, and places an order. Across town, the restaurant's **merchant app** lights up: a new ticket in the queue. They accept it with a prep estimate and start cooking. The moment the food is ready, a nearby driver running the **courier app** claims the order, drives to the restaurant, confirms a pickup code, and heads out — their location streaming live back to the customer's map. At the door, a delivery code closes the loop, a photo proof is uploaded, and the courier's earnings tick up.
+| metric | result |
+|---|---|
+| orders assigned to a courier | **+44.6%** (min +29.9%, max +53.8%) |
+| mean **modeled** delivery time | **−45.3%** (range −51.7% to −39.7%) |
+| total courier travel | −1.1% mean — but the worst seed is **+2.1%** |
+| seeds where matching won | **30 / 30**, strictly |
 
-Three apps, three completely different sets of screens — but underneath they must agree, exactly, on what an `Order` is, which state transitions are legal, how a courier gets paid, and how to talk to the database securely. **That shared agreement is this repository.**
+**Caveat, and it is the important half: the advantage is a function of courier scarcity
+and vanishes entirely once supply exceeds demand.** Holding demand at 240 orders, seed 42:
 
-Ravon is built like DoorDash / Uber Eats, adapted for a local market: native SwiftUI, iOS 17+, a Russian‑language (Cyrillic) UI, and a single shared **Supabase** backend (Postgres + Auth + Realtime + Storage).
+| couriers | greedy | matching | gain |
+|---|---|---|---|
+| 6 | 63 | 100 | **+58.7%** |
+| 12 | 115 | 162 | +40.9% |
+| 24 | 234 | 240 | +2.6% |
+| 48 | 240 | 240 | **0.0%** |
 
-| App | Audience | What they do |
-| --- | --- | --- |
-| 🛒 **Consumer** | Customers | Browse restaurants, build a cart, place & track orders, chat, tip |
-| 🍳 **Merchant** | Restaurants | Manage menus & hours, accept/reject orders, mark food ready |
-| 🚗 **Courier** | Drivers | Go online, claim orders, navigate, stream location, get paid |
+This is a peak-load optimisation — worth a great deal at the dinner rush and nothing on a
+slow Tuesday. It is pinned as a test so nobody later tunes dispatch for a regime where it
+cannot matter.
 
-## Why it's interesting
+**Second caveat: these are simulator numbers, not delivery times.** Distance is
+straight-line Haversine with no road network, kitchen prep is drawn from a uniform
+distribution, and couriers never decline an offer. The *comparison* is sound because both
+strategies run in the identical world; the absolute minutes are not an ETA.
 
-- **One core, three apps — no drift.** Models, business rules, and backend calls are defined and tested *once* in this package. A schema change is made in one place and every app picks it up. No copy‑pasting a `Order` struct three times and watching them diverge.
+**Third caveat: "on less fuel" would be an overclaim.** The mean travel difference is
+−1.1%, but the per-seed spread crosses zero. "No measurable travel penalty" is what the
+data supports.
 
-- **A 17-state order machine, modeled and tested.** The full lifecycle — from `scheduled` through `delivered`, plus six distinct cancellation states — lives in one typed state machine that knows what's terminal, what's active for a courier, and what transition is legal. The three apps physically *cannot* disagree about what state an order is in.
+→ [Full study](docs/dispatch-engine.md) · [ADR 0002](docs/adr/0002-min-cost-matching-over-greedy.md)
 
-- **Server-truth, not client-trust.** The client is treated as hostile (anyone can hit the API with the anon key). Authoritative checks — cart re-pricing, order creation, state transitions — run as `SECURITY DEFINER` RPCs and Row-Level-Security policies in Postgres. The Swift-side validation is convenience; the database is the referee.
+### Experiment design: measuring the bias of A/B designs against ground truth
 
-- **Battery-aware location streaming.** `CourierLocationStreamer` varies GPS cadence *and* movement filtering by order status — a courier idling online sips battery; one actively delivering streams tightly. The policy is a pure function, so it's unit-tested without a device.
+A simulator can do what production cannot — run the whole world on algorithm A, then on
+algorithm B with the same seed, so the *true* effect is known and each experiment design's
+bias can be measured rather than argued about.
 
-- **DoorDash-style auth, done properly.** Six-digit email OTP sign-up with resend cooldown, password recovery, live strength metering, and typed `AuthError`s mapped to friendly localized messages — no raw Supabase errors ever reach a user.
+| dispatch partition | true lift | naive A/B mean \|bias\| | switchback mean \|bias\| |
+|---|---|---|---|
+| none | 21.1 pts | 23.3 pts | 22.3 pts |
+| 3×3 zones | 1.9 pts | **3.0 pts** | **3.3 pts** |
 
-- **A realtime closed loop.** Live subscriptions push order status, courier location, menu changes, and in-order chat between all three sides as they happen — the same publish/subscribe model that lets the customer watch the driver approach.
+Both designs were initially biased by more than the entire effect they were estimating.
+The cause was not interference between arms — it was a **granularity mismatch**: a batch
+optimiser's effect is a property of the whole dispatch decision, so splitting orders
+between arms measures a different algorithm. Making dispatch itself run per zone cut
+absolute bias about **7×**.
+
+**Caveat 1 — the negative result.** At this scale, once dispatch is zone-partitioned,
+plain order-level randomisation is about as unbiased as a switchback. This does not
+reproduce DoorDash's headline; it localises why switchbacks matter (densely coupled
+markets with real carryover between time blocks, which 12 couriers over 9 zones is not).
+
+**Caveat 2 — relative bias got *worse*.** Absolute bias fell 23.3 → 3.0 points, but the
+true effect fell 21.1 → 1.9 at the same time. As a fraction of the effect, bias went from
+~1.1× to ~1.6×.
+
+**Caveat 3 — zones cost optimality.** That shrinking true effect is the third finding:
+partitioning 3×3 cost most of the optimiser's advantage, because a courier cannot serve
+an adjacent zone even when they are closest.
+
+→ [Full study](docs/experiment-design-study.md) · [ADR 0004](docs/adr/0004-zone-partitioning.md)
+
+### Correctness properties
+
+| property | how it is established |
+|---|---|
+| The matcher returns the true optimum | exhaustive permutation search over 300 random matrices, exact equality |
+| The order lifecycle graph is live | 17 property-based invariants over a declared 36-edge, 17-state, 4-actor transition table |
+| The graph is cyclic, and termination is not free | Tarjan SCC pass found exactly one cycle — courier cancellation requeues the order — so termination depends on a server-side rate limit, which is now asserted |
+| Simulations are reproducible | same seed ⇒ identical assignments, delivery times, travel and per-courier job counts |
+
+The lifecycle suite caught a modelling error in its own author's first version of the
+transition table. That is the argument for declaring the state machine as data.
+
+### Provenance of these numbers
+
+Measured against the working tree of branch `mmarufov/bucharest-v9`, parent commit
+[`737911a`](https://github.com/mmarufov/ravon-core/commit/737911a). **The dispatch sources
+and their tests are not yet committed at that SHA** — they are untracked in the working
+tree. Once they land, this line should cite the dispatch commit instead. Figures have
+drifted as the simulator changed (an earlier draft recorded +42.2%); the numbers above are
+what `swift test` and the simulator produce today, and they replace the earlier ones.
+
+---
 
 ## Architecture
 
-```
-┌──────────────┐   ┌──────────────┐   ┌──────────────┐
-│  Consumer    │   │  Merchant    │   │  Courier     │
-│    App       │   │    App       │   │    App       │
-│  (SwiftUI)   │   │  (SwiftUI)   │   │  (SwiftUI)   │
-└──────┬───────┘   └──────┬───────┘   └──────┬───────┘
-       │                  │                  │
-       └──────────────────┼──────────────────┘
-                          ▼
-              ┌───────────────────────┐
-              │       RavonCore       │  ◄── this repository
-              │  ┌─────────────────┐  │
-              │  │ Models          │  │   Codable · Sendable · public
-              │  │ AuthService     │  │   sign-up/in/out · OTP · recovery
-              │  │ SupabaseService │  │   ~60 typed DB ops + RPCs
-              │  │ RealtimeService │  │   live orders · location · chat
-              │  │ Theme + Auth UI │  │   shared brand kit + auth screens
-              │  └─────────────────┘  │
-              └───────────┬───────────┘
-                          ▼
-              ┌───────────────────────┐
-              │       Supabase        │
-              │ Postgres · Auth ·     │
-              │ Realtime · Storage    │
-              │ Row-Level Security ·  │
-              │ SECURITY DEFINER RPCs │
-              └───────────────────────┘
-```
+Solid lines exist. Dashed lines do not.
 
-**Key patterns**
+```mermaid
+flowchart TB
+    subgraph clients["Untrusted — ships on a device the user controls"]
+        C["Consumer iOS<br/>browse · order · track"]
+        M["Merchant iOS<br/>menu · hours · queue"]
+        K["Courier iOS<br/>claim · navigate · deliver"]
+    end
 
-- **Everything is `public`** — consumed by external app targets.
-- **`Sendable` wherever possible** — Swift 6 concurrency-ready.
-- **Services are `@MainActor` singletons** exposed via `.shared`.
-- **`AuthService` owns the `SupabaseClient`**; `SupabaseService` reaches it via `AuthService.shared.supabaseClient` — one authenticated client, one session.
-- **Config is injected, never hardcoded** — each app calls `RavonCore.configure(supabaseURL:supabaseAnonKey:)` at launch, so the same package can point at staging or production.
-- **UIKit-dependent UI is guarded** by `#if canImport(UIKit)` so the package still builds for macOS.
+    CORE["<b>RavonCore</b> — shared Swift package<br/>models · auth · realtime · theme"]
 
-## Repo layout
+    C --- CORE
+    M --- CORE
+    K --- CORE
 
-```
-Sources/RavonCore/
-├── Models/                     ~20 domain types mirroring the DB schema
-│   ├── Order.swift             17-state lifecycle + typed transitions
-│   ├── Restaurant.swift        listings, status, operating hours
-│   ├── MenuItem.swift          items, modifiers, availability
-│   ├── Profile.swift           user + UserRole (consumer/courier/merchant)
-│   ├── CourierEarning.swift    tiered earnings + period summaries
-│   ├── CartValidation.swift    pre-checkout truth-gate types
-│   └── …                       Address, ChatMessage, OrderEta, and more
-├── Services/
-│   ├── RavonConfig.swift       RavonCore.configure(...) — credential injection
-│   ├── AuthService.swift       session, sign-up/in/out, email OTP, recovery
-│   ├── AuthError.swift         raw Supabase errors → typed, localized messages
-│   ├── SupabaseService.swift   ~60 typed DB operations + RPC calls
-│   ├── RealtimeService.swift   live order / location / menu / chat subscriptions
-│   └── CourierLocationStreamer battery-aware GPS cadence + movement filtering
-└── UI/
-    ├── Theme.swift             brand colors, buttons, text fields, CardStyle
-    └── Auth/                   full shared auth flow (sign-in/up, OTP, recovery,
-                                forgot/new password, strength meter)
+    subgraph trusted["Trusted — server-side, holds credentials clients never see"]
+        direction TB
+        SVC["<b>Service tier</b> (Kotlin, in extraction)<br/>dispatch · order saga · ledger · fraud"]
+        PG[("<b>PostgreSQL</b><br/>RLS · pg_cron · PostGIS<br/>append-only transition log")]
+        RT["Realtime<br/>(Postgres CDC → WebSocket)"]
+        AUTH["Supabase Auth<br/>email OTP · JWT"]
 
-Tests/RavonCoreTests/           73 unit tests across 22 suites (see Testing)
+        SVC -.->|"service role"| PG
+        PG --> RT
+    end
 
-CLAUDE.md                       working notes / conventions for the codebase
+    CORE ==>|"PostgREST: reads"| PG
+    CORE ==>|"WebSocket: order status,<br/>courier location, chat"| RT
+    CORE ==>|"JWT"| AUTH
+    CORE -.->|"gRPC: writes"| SVC
+
+    AUTH -.->|"JWKS verify, sub → user id"| SVC
+
+    style trusted fill:#f6f6f8,stroke:#1A1A2E,stroke-width:2px
+    style clients fill:#fff4f1,stroke:#FF3008,stroke-width:2px
+    style SVC stroke-dasharray: 5 5
 ```
 
-## Local setup
+Four things this diagram is trying to say:
 
-RavonCore is a Swift Package — no Xcode project of its own. To build and test it standalone:
+1. **The trust boundary is the box, not the network hop.** Everything above it runs on
+   hardware the user owns, so every value it sends is an assertion. The anon key it ships
+   with is public client config; anything reachable with it must be safe against `curl`.
+   Row-level security stays on after the service tier lands — it becomes defence in depth
+   rather than the only gate.
+2. **Two transports, on purpose.** Commands need global state and transactional integrity,
+   so they go to the service tier. Reads and subscriptions stay on PostgREST and Postgres
+   CDC because those already work and rebuilding them buys nothing. This is what an
+   incremental extraction looks like partway through.
+3. **Dispatch is currently in the wrong place** — it lives in the *client* package, and a
+   phone cannot see the other couriers. It is there because that is where it could be
+   built and measured. It is the first thing that moves.
+4. **Realtime is change-data-capture, not a second source of truth.**
+
+→ [Diagram notes](docs/architecture.md) · [ADR 0005](docs/adr/0005-extract-to-kotlin-not-rewrite.md)
+
+---
+
+## What's real, what's simulated, what's not built
+
+Stating this boundary is the point. The dispatch numbers mean something specific and it
+is easy to read them as meaning more.
+
+### Real — code in this repository, exercised by tests
+
+| | Evidence |
+|---|---|
+| Shared Swift package: models, auth, realtime, theme | `Sources/RavonCore/` — 43 files, 7,454 lines |
+| Hungarian solver, verified optimal against brute force | `Dispatch/HungarianSolver.swift`, 300 matrices |
+| Cost model with capped urgency and fairness credits | `Dispatch/Dispatcher.swift` |
+| Deterministic marketplace simulator with latent state | `Dispatch/MarketplaceSimulator.swift` |
+| Zone partitioning and the switchback harness | `Dispatch/{DispatchZone,SwitchbackExperiment}.swift` |
+| 17-state, 36-edge, 4-actor declared transition table | `Models/OrderLifecycle.swift` |
+| 17 property-based lifecycle invariants incl. Tarjan SCC | `Tests/.../OrderLifecycleInvariantTests.swift` |
+| Email-OTP auth flow, typed errors, shared SwiftUI | `UI/Auth/` |
+| Schema-drift and JWT-decoding credential CI gates | `scripts/` |
+| 163 tests, all passing | `swift test` |
+
+### Simulated — real code, synthetic world
+
+| | What that means |
+|---|---|
+| Every dispatch and experiment number in this README | Produced by `MarketplaceSimulator`, not by couriers |
+| Travel time | Haversine ÷ a fixed speed. No roads, no traffic, no turns |
+| Kitchen prep time | Uniform random, not learned |
+| Courier behaviour | An assigned courier always accepts. Real couriers decline |
+| Order arrivals | Synthetic, clustered around a modelled city centre |
+
+### Not built
+
+| | Status |
+|---|---|
+| Kotlin / gRPC service tier | No `services/` directory. Planned; [ADR 0005](docs/adr/0005-extract-to-kotlin-not-rewrite.md) |
+| Protobuf contracts and compatibility gate | Planned |
+| Double-entry ledger | No schema, no tests, no CI job at the documented commit. A concurrent effort has scaffolded `db/ledger/`, but it currently holds only a Python virtualenv |
+| Probabilistic ETA, forecasting, anomaly detection | Not verified here. A concurrent effort is building a Python layer under `ml/`; nothing in this README depends on it |
+| Batching (multiple orders per courier) | Not modelled — the largest gap vs. the reference architecture |
+| Courier acceptance probability | Not modelled. There is no `courier_decline_order` RPC |
+| Dispatch wired to the app | The engine and its evaluation exist; no `dispatch_tick`, still `claim_order` |
+
+### No running backend
+
+**The Supabase project behind this system has been deleted.** The host returns NXDOMAIN
+and the Management API returns 404 "Resource has been removed" for the project ref. The
+three iOS apps are backend-less. Nothing here can be run against live data.
+
+Consequences worth knowing:
+
+- The 19 SQL migrations live in `.context/`, which is gitignored, so they are not in this
+  repository. They were also an incomplete record even when the project existed: 14 of 15
+  tables touched by Swift were never created by a migration, and six Postgres enums were
+  created through the dashboard.
+- The `schema-drift` CI job reads `.context/migrations` and therefore **cannot pass on
+  GitHub** as currently written. It passes locally, where the directory exists.
+- The three iOS app repositories (consumer, merchant, courier) are separate and not part
+  of this repo, so nothing here verifies their contents.
+
+The best incident story in the project came from this: when the backend disappeared, the
+apps rendered "backend deleted" and "no orders today" identically. A typed service state
+that distinguishes *degraded* from *empty* is the fix, and it is not built either.
+
+---
+
+## Running it
 
 ```bash
-git clone https://github.com/<your-org>/ravon-core.git
-cd ravon-core
 swift build
-swift test
+swift test                                  # 163 tests: 102 XCTest + 61 swift-testing
 ```
 
-**Requirements**
+Targeted suites:
 
-| | |
-| --- | --- |
-| Swift | 5.9+ |
-| iOS | 17.0+ |
-| macOS | 14.0+ |
-| Backend | A Supabase project (URL + anon key) |
-
-The only third-party dependency is [`supabase-swift`](https://github.com/supabase/supabase-swift) (`2.41+`); everything else is Apple's own (`swift-crypto`, `swift-http-types`, …), resolved transitively.
-
-**Adding it to an app**
-
-In Xcode → *File → Add Package Dependencies…*, or in the app's `Package.swift`:
-
-```swift
-dependencies: [
-    .package(url: "https://github.com/<your-org>/ravon-core.git", from: "1.0.0"),
-],
-targets: [
-    .target(name: "ConsumerApp", dependencies: [
-        .product(name: "RavonCore", package: "ravon-core"),
-    ]),
-]
+```bash
+swift test --filter 'Dispatch|Hungarian'    # 15 — dispatch quality and solver optimality
+swift test --filter 'Switchback'            #  7 — experiment-design bias study
+swift test --filter 'OrderLifecycle'        # 17 — state-machine invariants
 ```
 
-**Configure once, at launch** — before any service is touched:
+Requires Swift 5.9+, iOS 17+ / macOS 14+. The only third-party dependency is
+[`supabase-swift`](https://github.com/supabase/supabase-swift).
+
+### CI gates
+
+Five jobs in `.github/workflows/ci.yml`. Each exists because of a specific class of defect:
+
+| job | catches |
+|---|---|
+| `test` | ordinary regressions, across the whole suite |
+| `lifecycle-invariants` | a state-machine change that breaks liveness or visibility — a marketplace correctness bug, not a flaky test |
+| `dispatch-quality` | dispatch getting worse for real couriers, which no unit test would notice |
+| `schema-drift` | Swift `CodingKeys` diverging from the SQL columns. Not a compile error, not a test failure — a **decode crash in a shipped iOS app** |
+| `secret-scan` | a committed `service_role` JWT, which would be a full database compromise. Decodes every JWT and inspects the `role` claim rather than grepping for a word that legitimately appears in docs |
+
+Two honest notes. The workflow file is **untracked at the documented commit, so CI has
+never actually run** — there is no green badge to point at, and that is why there is no
+badge in this README. And `schema-drift` will fail on GitHub until the migrations are
+tracked, for the reason given above.
+
+Both scripts run locally:
+
+```bash
+python3 scripts/schema_drift.py    # 0 drift, 15 unverified
+python3 scripts/scan_secrets.py .  # clean
+```
+
+---
+
+## Deliberately not built
+
+Each rejection carries the threshold that would reverse it, because a rejection without a
+threshold is an excuse. Full reasoning in
+[ADR 0007](docs/adr/0007-rejected-technologies.md).
+
+| | Why not | Would become justified when |
+|---|---|---|
+| **Gurobi** | Single-order assignment is solved *exactly* by the Hungarian algorithm in microseconds; a commercial solver cannot beat optimal | Batching enters the model — then it is a vehicle-routing problem and the exact algorithm no longer applies. Try OR-Tools first |
+| **Kafka** | The guarantees — durability, ordering, replay, fan-out — are implemented on an append-only Postgres table plus CDC. Transactional emission is *better* this way: one write, no outbox | Multiple extracted services exchanging events, or sustained rates above ~5,000/s. Current arithmetic: ~2.5/s |
+| **Cassandra** | Every entity needs multi-row transactions; the ledger wants a deferred constraint at COMMIT, which has no Cassandra equivalent | Write throughput one tuned Postgres primary cannot absorb, after partitioning and read replicas |
+| **Service mesh** | One deployable today, at most four after the extraction. gRPC's own TLS, deadlines and retries cover it in config | ~10+ services, or more than two languages in the service tier |
+| **Feature store** | It prevents training/serving skew. There is no serving path, so skew cannot occur | The same feature is computed in both an offline job and an online request path |
+| **Bazel** | ~7,500 lines in one SwiftPM target; a clean build is seconds | CI wall-clock consistently over ~15 min with no cheaper fix left |
+
+The **monorepo** idea is separately correct and is being adopted; a distributed build
+system is a different decision that often gets conflated with it.
+
+---
+
+## Architecture Decision Records
+
+Each one states the problem, the options weighed, what was chosen, and what it cost.
+
+| # | Decision |
+|---|---|
+| [0001](docs/adr/0001-order-lifecycle-as-declared-data.md) | Model the order lifecycle as declared data, not scattered status checks |
+| [0002](docs/adr/0002-min-cost-matching-over-greedy.md) | Solve dispatch as minimum-cost matching, and do not minimise distance |
+| [0003](docs/adr/0003-deterministic-simulation-as-evaluation.md) | Evaluate dispatch by deterministic simulation, with latent state |
+| [0004](docs/adr/0004-zone-partitioning.md) | Zone partitioning: tractability *and* measurability, at a real cost |
+| [0005](docs/adr/0005-extract-to-kotlin-not-rewrite.md) | Extract a Kotlin service tier; do not rewrite the backend — **proposed, not built** |
+| [0006](docs/adr/0006-postgres-over-kafka.md) | Implement the event guarantees on Postgres, not on Kafka |
+| [0007](docs/adr/0007-rejected-technologies.md) | Technologies deliberately not used, and what would change that |
+
+## Further reading
+
+- [Dispatch engine — design, results, limitations](docs/dispatch-engine.md)
+- [Experiment design under interference](docs/experiment-design-study.md)
+- [DeepRed — what DoorDash runs, and how Ravon compares](docs/deepred-research.md)
+- [Architecture diagram and notes](docs/architecture.md)
+
+## Using the package
 
 ```swift
-import SwiftUI
 import RavonCore
 
-@main
-struct ConsumerApp: App {
-    init() {
-        RavonCore.configure(
-            supabaseURL: URL(string: "https://YOUR-PROJECT.supabase.co")!,
-            supabaseAnonKey: "YOUR_ANON_KEY"   // inject from an .xcconfig / Secrets.plist / CI secret
-        )
-    }
-    var body: some Scene { WindowGroup { RootView() } }
-}
-```
-
-> ⚠️ The anon key is *public client config* — but credentials still don't belong in source control. Inject them from a git-ignored `.xcconfig`, `Secrets.plist`, or CI secret. See [Security model](#security-model).
-
-Then observe auth state and call the backend with typed methods:
-
-```swift
-struct RootView: View {
-    @StateObject private var auth = AuthService.shared
-    var body: some View {
-        if !auth.isLoaded            { ProgressView() }
-        else if auth.isSignedIn      { HomeView() }
-        else                         { RavonAuthFlow() }   // shared sign-in / sign-up / OTP UI
-    }
-}
-
-let service     = SupabaseService.shared
-let restaurants = try await service.fetchRestaurants()
-let orderId     = try await service.createOrder(
-    restaurantId: restaurant.id, addressId: address.id,
-    items: cartItems, notes: "Без лука, пожалуйста"
+RavonCore.configure(
+    supabaseURL: URL(string: "https://YOUR-PROJECT.supabase.co")!,
+    supabaseAnonKey: "YOUR_ANON_KEY"   // inject from .xcconfig / Secrets.plist / CI secret
 )
-
-try await RealtimeService.shared.subscribeToOrder(orderId: orderId)
 ```
 
-## How an order moves through the system
+Configure once at launch, before any service is touched. The anon key is public client
+config, but credentials still do not belong in source control — which is what the
+`secret-scan` gate enforces. A `service_role` key must never appear in client code, a
+mobile binary, tracked docs or repo config, including in a private repo.
 
-1. **Customer places the order.** The consumer app builds a cart and calls `validateCart(...)` — a server-truth gate that re-prices and re-checks availability — then `createOrder(...)`, which runs the atomic `create_order` RPC in Postgres. State: `created`.
-2. **Merchant accepts.** The merchant app's realtime queue (`subscribeToRestaurantOrders`) shows the ticket instantly. They call `acceptOrder(estimatedPrepMinutes:)` → `startPreparing()` → `markOrderReady()`. State walks `accepted → preparing → ready`.
-3. **Courier claims it.** Online drivers see it via `subscribeToAvailableOrders`; the first to call `claimOrder(...)` wins the row (race-safe, resolved in Postgres). State: `assigned`.
-4. **Pickup.** The courier drives over (`courierArrivedAtRestaurant()`), then `pickUpOrder(pickupCode:)` verifies a code before the food is handed off. State: `courier_arrived_restaurant → picked_up`.
-5. **Delivery, streamed live.** `startDelivering()` flips the state to `delivering`, and `CourierLocationStreamer` begins pushing GPS at a cadence tuned to the active status — which the customer watches move on their map via `subscribeToCourierLocation`.
-6. **Handoff.** At the door, `deliverOrder(deliveryCode:)` verifies a second code and uploads photo proof to Storage. State: `delivered`. Earnings are recorded and appear in the courier's `fetchEarningsSummary(...)`.
-7. **Escalation paths, when reality intervenes.** No-shows, restaurant delays, post-pickup problems, and hybrid cancellations (with cooldowns) each have typed methods and their own terminal states — `cancelled_by_customer`, `cancelled_by_restaurant`, `cancelled_by_courier`, `cancelled_by_system` — so nothing ends up in an ambiguous limbo.
-
-Every transition is backed by the tested state machine in `Order.swift`, so all three apps read the same order the same way.
-
-## Public API surface
-
-**`RavonCore`** — `configure(supabaseURL:supabaseAnonKey:)`, injected once at launch.
-
-**`AuthService`** — `@MainActor`, `ObservableObject`, `.shared`. Published: `session`, `isLoaded`, `userRole`; convenience `isSignedIn`, `userId`, `userEmail`, `accessToken`, `supabaseClient`.
-
-| Area | Methods |
-| --- | --- |
-| Session | `loadSession()` |
-| Sign up / in / out | `signUp(email:password:fullName:role:)`, `signIn(email:password:)`, `signOut()` |
-| Email OTP | `verifySignUpOTP(email:token:)`, `resendSignUpOTP(email:)` |
-| Recovery | `requestPasswordRecovery(email:)`, `verifyRecoveryOTP(email:token:)` |
-| Password | `setNewPassword(_:)`, `changePassword(current:new:)` |
-
-**`SupabaseService`** — `@MainActor`, `.shared`, ~60 operations grouped by domain: **Profile**, **Restaurants** (+ server-truth orderability), **Menu**, **Addresses**, **Orders** (consumer/merchant/courier views), **order creation via RPC**, **cart validation**, **order lifecycle** (accept / prepare / ready / reject / pickup / deliver / cancel + escalation), **courier location & status**, **order claiming**, **earnings**, **restaurant hours**, **modifiers**, and **merchant menu management**.
-
-**`RealtimeService`** — `ObservableObject`. `subscribeToOrder`, `subscribeToRestaurantOrders`, `subscribeToCourierOrders`, `subscribeToMenuChanges`, `subscribeToRestaurantStatus`, `subscribeToCourierLocation`, `subscribeToAvailableOrders`, `subscribeToChat` — each with a matching `unsubscribe…`, plus `unsubscribeAll()`.
-
-**`CourierLocationStreamer`** — `submit(...)`, `setActiveOrderStatus(_:)`, `cadence(for:)`, `movementFilterMeters(for:)`, `reset()`.
-
-## Design system
-
-Defined in `UI/Theme.swift` and the shared `UI/Auth/` components, so all three apps look like one product.
-
-| Token | Value | Use |
-| --- | --- | --- |
-| `ravonRed` | `#FF3008` | Primary brand / CTAs |
-| `ravonDark` | `#1A1A2E` | Dark surfaces & text |
-| `ravonGray` | — | Secondary text / dividers |
-
-Components: `RavonPrimaryButton`, `PressableButtonStyle`, `RavonTextField` (UIKit-backed, guarded), a `CardStyle` modifier, and a full shared auth UI (`RavonSignInView`, `RavonSignUpView`, `RavonOTPView`, `RavonForgotPasswordView`, `RavonNewPasswordView`, `RavonPasswordStrengthMeter`). UI language is Russian (Cyrillic).
-
-## Security model
-
-A mobile client is fundamentally untrusted — anyone can call the API with the anon key outside the app. RavonCore is built with that in mind:
-
-- 🔓 **The anon key is public client config, not a secret.** Every RLS policy and every RPC reachable with `anon` must be safe against direct API access. The client is treated as hostile.
-- 🚫 **The `service_role` key never appears in this repo** — not in source, docs, binaries, or config, even in a private repo. It's git-ignored defensively.
-- 🛡️ **Authorization lives in Postgres**, not in Swift. Client-side validation (cart re-pricing, transition checks) is convenience; the authoritative checks are RLS policies and `SECURITY DEFINER` RPCs, verified against the live database — not just the client.
-- 🙈 **Credentials are injected, never committed.** `.env`, `Secrets.plist`, `*.xcconfig`, `service_role*`, and similar are listed in `.gitignore`. This repository ships **credential-free** — fork it and nothing live comes with it.
-
-## Testing
-
-**73 unit tests across 22 suites**, run with `swift test`. Coverage targets the logic that must not regress across three apps:
-
-- Auth error mapping, email validation, password strength, OTP cooldown
-- Cart validation and the pre-checkout truth gate
-- Order state modeling, ETA computation, scheduled orders, soft-delete coding
-- Courier earnings tiers, cancellation rules, delivery codes, heartbeat escalation, reassignment & race-condition coding
-- Restaurant orderability hints, operating hours & next-open-time, menu category templates
-- Chat RLS coding, no-show/delay coding, insert-struct round-tripping
-
-## What's intentionally out of scope
-
-- **This package is client-only.** The Supabase schema, RLS policies, and RPC bodies live in the backend project, not here. RavonCore assumes they exist and are correct.
-- **No payment gateway integration yet.** Tips and totals are modeled; charging a card is a future backend concern.
-- **UI language is Russian only.** There is no localization/translation layer in the current build.
-- **App shells live elsewhere.** Screens, navigation, and app icons for the three apps are in their own repositories — this is the shared core, deliberately UI-light beyond the theme kit and auth flow.
-- **Authoritative security is the database's job.** Any check that actually matters is enforced server-side; don't treat the Swift validation here as a security boundary.
-
-## Conventions
-
-- **Commits:** `type: description` — `feat`, `fix`, `refactor`, `chore`, etc.
-- **Access control:** everything consumed by apps is `public`; prefer `Sendable`.
-- **Services:** `@MainActor` singletons via `.shared`.
-- **Platform guards:** UIKit-only code lives behind `#if canImport(UIKit)`.
-- **Build:** `swift build` · **Test:** `swift test`.
-
-## Credits
-
-- [Supabase](https://supabase.com) — Postgres, Auth, Realtime, and Storage in one backend.
-- [supabase-swift](https://github.com/supabase/supabase-swift) — the official Swift client this package wraps.
-- Built with Swift · SwiftUI · Supabase — для Таджикистана 🇹🇯
-
-<div align="center">
-
-**RavonCore** — the shared spine of the Ravon delivery platform.
-
-</div>
+UI strings are Russian (Cyrillic). Brand colour is `#FF3008`.
