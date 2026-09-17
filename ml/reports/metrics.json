@@ -63,6 +63,636 @@
         "tests_run": 13474
       }
     ],
+    "gap_window": {
+      "detections_after_12_days": {
+        "21-day baseline, 7-day gap": 8,
+        "28-day baseline, no gap": 6
+      },
+      "first_detection_day": {
+        "21-day baseline, 7-day gap": 9,
+        "28-day baseline, no gap": 9
+      },
+      "history": {
+        "21-day baseline, 7-day gap": [
+          {
+            "day": 50,
+            "days_elapsed": 1,
+            "detected": false,
+            "latency_days": 9,
+            "magnitude": 0.006,
+            "max_z": 10.366760675840762,
+            "rank": NaN,
+            "truth_z": -0.33851876835969735
+          },
+          {
+            "day": 51,
+            "days_elapsed": 2,
+            "detected": false,
+            "latency_days": 9,
+            "magnitude": 0.012,
+            "max_z": 12.701148228771908,
+            "rank": NaN,
+            "truth_z": -0.06947373428077644
+          },
+          {
+            "day": 52,
+            "days_elapsed": 3,
+            "detected": false,
+            "latency_days": 9,
+            "magnitude": 0.018000000000000002,
+            "max_z": 3.2127861085607727,
+            "rank": NaN,
+            "truth_z": -0.661003796274842
+          },
+          {
+            "day": 53,
+            "days_elapsed": 4,
+            "detected": false,
+            "latency_days": 9,
+            "magnitude": 0.024,
+            "max_z": NaN,
+            "rank": NaN,
+            "truth_z": -0.44929372825726666
+          },
+          {
+            "day": 54,
+            "days_elapsed": 5,
+            "detected": false,
+            "latency_days": 9,
+            "magnitude": 0.03,
+            "max_z": 3.2262928328071268,
+            "rank": NaN,
+            "truth_z": -0.3435646985457127
+          },
+          {
+            "day": 55,
+            "days_elapsed": 6,
+            "detected": false,
+            "latency_days": 9,
+            "magnitude": 0.036000000000000004,
+            "max_z": 3.6012280423228438,
+            "rank": NaN,
+            "truth_z": -0.033052292532326624
+          },
+          {
+            "day": 56,
+            "days_elapsed": 7,
+            "detected": false,
+            "latency_days": 9,
+            "magnitude": 0.042,
+            "max_z": NaN,
+            "rank": NaN,
+            "truth_z": 2.212146950501974
+          },
+          {
+            "day": 57,
+            "days_elapsed": 8,
+            "detected": false,
+            "latency_days": 9,
+            "magnitude": 0.048,
+            "max_z": NaN,
+            "rank": NaN,
+            "truth_z": 2.1585858725216207
+          },
+          {
+            "day": 58,
+            "days_elapsed": 9,
+            "detected": true,
+            "latency_days": 9,
+            "magnitude": 0.054,
+            "max_z": 5.431393702025295,
+            "rank": 1.0,
+            "truth_z": 4.330369685242481
+          },
+          {
+            "day": 59,
+            "days_elapsed": 10,
+            "detected": false,
+            "latency_days": 9,
+            "magnitude": 0.06,
+            "max_z": NaN,
+            "rank": NaN,
+            "truth_z": 2.921172206728369
+          },
+          {
+            "day": 60,
+            "days_elapsed": 11,
+            "detected": true,
+            "latency_days": 9,
+            "magnitude": 0.066,
+            "max_z": 4.095642380209908,
+            "rank": 1.0,
+            "truth_z": 2.963669697021848
+          },
+          {
+            "day": 61,
+            "days_elapsed": 12,
+            "detected": false,
+            "latency_days": 9,
+            "magnitude": 0.07200000000000001,
+            "max_z": NaN,
+            "rank": NaN,
+            "truth_z": 1.6171041129378951
+          },
+          {
+            "day": 62,
+            "days_elapsed": 13,
+            "detected": true,
+            "latency_days": 9,
+            "magnitude": 0.078,
+            "max_z": 6.74149654055151,
+            "rank": 1.0,
+            "truth_z": 3.762430311424502
+          },
+          {
+            "day": 63,
+            "days_elapsed": 14,
+            "detected": true,
+            "latency_days": 9,
+            "magnitude": 0.084,
+            "max_z": 8.523344352192012,
+            "rank": 1.0,
+            "truth_z": 8.2775857632088
+          },
+          {
+            "day": 64,
+            "days_elapsed": 15,
+            "detected": true,
+            "latency_days": 9,
+            "magnitude": 0.09,
+            "max_z": 9.016645599487216,
+            "rank": 1.0,
+            "truth_z": 9.016645599487216
+          },
+          {
+            "day": 65,
+            "days_elapsed": 16,
+            "detected": true,
+            "latency_days": 9,
+            "magnitude": 0.096,
+            "max_z": 8.235299545099775,
+            "rank": 1.0,
+            "truth_z": 8.235299545099775
+          },
+          {
+            "day": 66,
+            "days_elapsed": 17,
+            "detected": true,
+            "latency_days": 9,
+            "magnitude": 0.10200000000000001,
+            "max_z": 3.500031067425718,
+            "rank": 1.0,
+            "truth_z": 3.500031067425718
+          },
+          {
+            "day": 67,
+            "days_elapsed": 18,
+            "detected": true,
+            "latency_days": 9,
+            "magnitude": 0.108,
+            "max_z": 6.395386476790314,
+            "rank": 1.0,
+            "truth_z": 4.682800199342794
+          },
+          {
+            "day": 68,
+            "days_elapsed": 19,
+            "detected": true,
+            "latency_days": 9,
+            "magnitude": 0.114,
+            "max_z": 5.686624254163197,
+            "rank": 1.0,
+            "truth_z": 4.561412184919973
+          },
+          {
+            "day": 69,
+            "days_elapsed": 20,
+            "detected": true,
+            "latency_days": 9,
+            "magnitude": 0.12,
+            "max_z": 7.892556749035278,
+            "rank": 1.0,
+            "truth_z": 6.363481131266329
+          }
+        ],
+        "28-day baseline, no gap": [
+          {
+            "day": 50,
+            "days_elapsed": 1,
+            "detected": false,
+            "latency_days": 9,
+            "magnitude": 0.006,
+            "max_z": 11.339358317889303,
+            "rank": NaN,
+            "truth_z": -0.008043142865258302
+          },
+          {
+            "day": 51,
+            "days_elapsed": 2,
+            "detected": false,
+            "latency_days": 9,
+            "magnitude": 0.012,
+            "max_z": 11.382025894589702,
+            "rank": NaN,
+            "truth_z": 0.2775666476143372
+          },
+          {
+            "day": 52,
+            "days_elapsed": 3,
+            "detected": false,
+            "latency_days": 9,
+            "magnitude": 0.018000000000000002,
+            "max_z": NaN,
+            "rank": NaN,
+            "truth_z": -0.472001667218885
+          },
+          {
+            "day": 53,
+            "days_elapsed": 4,
+            "detected": false,
+            "latency_days": 9,
+            "magnitude": 0.024,
+            "max_z": NaN,
+            "rank": NaN,
+            "truth_z": -0.2666823388561933
+          },
+          {
+            "day": 54,
+            "days_elapsed": 5,
+            "detected": false,
+            "latency_days": 9,
+            "magnitude": 0.03,
+            "max_z": NaN,
+            "rank": NaN,
+            "truth_z": -0.20010426683608318
+          },
+          {
+            "day": 55,
+            "days_elapsed": 6,
+            "detected": false,
+            "latency_days": 9,
+            "magnitude": 0.036000000000000004,
+            "max_z": 3.066016370409675,
+            "rank": NaN,
+            "truth_z": 0.1128320298183401
+          },
+          {
+            "day": 56,
+            "days_elapsed": 7,
+            "detected": false,
+            "latency_days": 9,
+            "magnitude": 0.042,
+            "max_z": 3.501473925025784,
+            "rank": NaN,
+            "truth_z": 2.540861052571844
+          },
+          {
+            "day": 57,
+            "days_elapsed": 8,
+            "detected": false,
+            "latency_days": 9,
+            "magnitude": 0.048,
+            "max_z": NaN,
+            "rank": NaN,
+            "truth_z": 2.460138055269501
+          },
+          {
+            "day": 58,
+            "days_elapsed": 9,
+            "detected": true,
+            "latency_days": 9,
+            "magnitude": 0.054,
+            "max_z": 5.973000455405874,
+            "rank": 1.0,
+            "truth_z": 4.797699005232527
+          },
+          {
+            "day": 59,
+            "days_elapsed": 10,
+            "detected": false,
+            "latency_days": 9,
+            "magnitude": 0.06,
+            "max_z": NaN,
+            "rank": NaN,
+            "truth_z": 2.656324135149865
+          },
+          {
+            "day": 60,
+            "days_elapsed": 11,
+            "detected": true,
+            "latency_days": 9,
+            "magnitude": 0.066,
+            "max_z": 3.479430589570278,
+            "rank": 1.0,
+            "truth_z": 2.65508881458512
+          },
+          {
+            "day": 61,
+            "days_elapsed": 12,
+            "detected": false,
+            "latency_days": 9,
+            "magnitude": 0.07200000000000001,
+            "max_z": NaN,
+            "rank": NaN,
+            "truth_z": 1.0555393967171411
+          },
+          {
+            "day": 62,
+            "days_elapsed": 13,
+            "detected": true,
+            "latency_days": 9,
+            "magnitude": 0.078,
+            "max_z": 4.831388516805921,
+            "rank": 2.0,
+            "truth_z": 2.8032101678995334
+          },
+          {
+            "day": 63,
+            "days_elapsed": 14,
+            "detected": true,
+            "latency_days": 9,
+            "magnitude": 0.084,
+            "max_z": 5.482269786447939,
+            "rank": 1.0,
+            "truth_z": 4.7757345152238075
+          },
+          {
+            "day": 64,
+            "days_elapsed": 15,
+            "detected": true,
+            "latency_days": 9,
+            "magnitude": 0.09,
+            "max_z": 5.158445911687901,
+            "rank": 1.0,
+            "truth_z": 5.158445911687901
+          },
+          {
+            "day": 65,
+            "days_elapsed": 16,
+            "detected": true,
+            "latency_days": 9,
+            "magnitude": 0.096,
+            "max_z": 4.341329053870979,
+            "rank": 1.0,
+            "truth_z": 3.9620207009626043
+          },
+          {
+            "day": 66,
+            "days_elapsed": 17,
+            "detected": false,
+            "latency_days": 9,
+            "magnitude": 0.10200000000000001,
+            "max_z": 3.4767027071058907,
+            "rank": NaN,
+            "truth_z": 1.817649351197426
+          },
+          {
+            "day": 67,
+            "days_elapsed": 18,
+            "detected": false,
+            "latency_days": 9,
+            "magnitude": 0.108,
+            "max_z": 7.171842336431658,
+            "rank": NaN,
+            "truth_z": 2.4841311603733782
+          },
+          {
+            "day": 68,
+            "days_elapsed": 19,
+            "detected": true,
+            "latency_days": 9,
+            "magnitude": 0.114,
+            "max_z": 4.245120129206596,
+            "rank": 1.0,
+            "truth_z": 3.16918819908558
+          },
+          {
+            "day": 69,
+            "days_elapsed": 20,
+            "detected": true,
+            "latency_days": 9,
+            "magnitude": 0.12,
+            "max_z": 5.9883918583252065,
+            "rank": 1.0,
+            "truth_z": 4.38611545735099
+          }
+        ]
+      },
+      "mean_truth_z_after_12_days": {
+        "21-day baseline, 7-day gap": 5.557421101679222,
+        "28-day baseline, no gap": 3.290226095610929
+      },
+      "ramp": "zone z0-1 cancellation rate ramps 0.6% -> 12% over 20 days"
+    },
+    "injection_cancellation_spike": [
+      {
+        "rows": [
+          {
+            "detection_rate": 0.0,
+            "magnitude": 0.03,
+            "mean_truth_z": 0.270850389982451,
+            "top_is_correct": 0.0
+          },
+          {
+            "detection_rate": 0.1,
+            "magnitude": 0.05,
+            "mean_truth_z": 0.6615753706391032,
+            "top_is_correct": 0.1
+          },
+          {
+            "detection_rate": 0.1,
+            "magnitude": 0.08,
+            "mean_truth_z": 1.284997978222201,
+            "top_is_correct": 0.1
+          },
+          {
+            "detection_rate": 0.2,
+            "magnitude": 0.1,
+            "mean_truth_z": 1.6192371994498103,
+            "top_is_correct": 0.2
+          },
+          {
+            "detection_rate": 0.4,
+            "magnitude": 0.15,
+            "mean_truth_z": 2.623425562078958,
+            "top_is_correct": 0.3
+          },
+          {
+            "detection_rate": 0.6,
+            "magnitude": 0.2,
+            "mean_truth_z": 3.627387585025354,
+            "top_is_correct": 0.5
+          }
+        ],
+        "test_days": 1
+      },
+      {
+        "rows": [
+          {
+            "detection_rate": 0.3,
+            "magnitude": 0.03,
+            "mean_truth_z": 1.4240217368729722,
+            "top_is_correct": 0.3
+          },
+          {
+            "detection_rate": 0.5,
+            "magnitude": 0.05,
+            "mean_truth_z": 2.093851187644045,
+            "top_is_correct": 0.3
+          },
+          {
+            "detection_rate": 0.6,
+            "magnitude": 0.08,
+            "mean_truth_z": 3.1275055673555476,
+            "top_is_correct": 0.4
+          },
+          {
+            "detection_rate": 0.8,
+            "magnitude": 0.1,
+            "mean_truth_z": 3.849239247402964,
+            "top_is_correct": 0.7
+          },
+          {
+            "detection_rate": 0.9,
+            "magnitude": 0.15,
+            "mean_truth_z": 5.56074227609088,
+            "top_is_correct": 0.7
+          },
+          {
+            "detection_rate": 1.0,
+            "magnitude": 0.2,
+            "mean_truth_z": 7.272545954061587,
+            "top_is_correct": 0.9
+          }
+        ],
+        "test_days": 3
+      }
+    ],
+    "injection_slow_restaurant": [
+      {
+        "rows": [
+          {
+            "detection_rate": 0.0,
+            "magnitude": 8,
+            "mean_truth_z": 0.16943817356152405,
+            "top_is_correct": 0.0
+          },
+          {
+            "detection_rate": 0.0,
+            "magnitude": 12,
+            "mean_truth_z": 0.4857339004643523,
+            "top_is_correct": 0.0
+          },
+          {
+            "detection_rate": 0.0,
+            "magnitude": 16,
+            "mean_truth_z": 0.8020296273671805,
+            "top_is_correct": 0.0
+          },
+          {
+            "detection_rate": 0.0,
+            "magnitude": 20,
+            "mean_truth_z": 1.1183253542700087,
+            "top_is_correct": 0.0
+          },
+          {
+            "detection_rate": 0.2,
+            "magnitude": 25,
+            "mean_truth_z": 1.5136950128985438,
+            "top_is_correct": 0.2
+          },
+          {
+            "detection_rate": 0.2,
+            "magnitude": 30,
+            "mean_truth_z": 1.909064671527079,
+            "top_is_correct": 0.2
+          }
+        ],
+        "test_days": 1
+      },
+      {
+        "rows": [
+          {
+            "detection_rate": 0.1,
+            "magnitude": 8,
+            "mean_truth_z": 0.7451740533144786,
+            "top_is_correct": 0.1
+          },
+          {
+            "detection_rate": 0.1,
+            "magnitude": 12,
+            "mean_truth_z": 1.2835823109699591,
+            "top_is_correct": 0.1
+          },
+          {
+            "detection_rate": 0.1,
+            "magnitude": 16,
+            "mean_truth_z": 1.82199056862544,
+            "top_is_correct": 0.1
+          },
+          {
+            "detection_rate": 0.3,
+            "magnitude": 20,
+            "mean_truth_z": 2.36039882628092,
+            "top_is_correct": 0.3
+          },
+          {
+            "detection_rate": 0.4,
+            "magnitude": 25,
+            "mean_truth_z": 3.0334091483502705,
+            "top_is_correct": 0.4
+          },
+          {
+            "detection_rate": 0.7,
+            "magnitude": 30,
+            "mean_truth_z": 3.706419470419621,
+            "top_is_correct": 0.7
+          }
+        ],
+        "test_days": 3
+      },
+      {
+        "rows": [
+          {
+            "detection_rate": 0.3,
+            "magnitude": 8,
+            "mean_truth_z": 1.5541450301326496,
+            "top_is_correct": 0.3
+          },
+          {
+            "detection_rate": 0.3,
+            "magnitude": 12,
+            "mean_truth_z": 2.3569074307504527,
+            "top_is_correct": 0.3
+          },
+          {
+            "detection_rate": 0.4,
+            "magnitude": 16,
+            "mean_truth_z": 3.159669831368256,
+            "top_is_correct": 0.4
+          },
+          {
+            "detection_rate": 0.7,
+            "magnitude": 20,
+            "mean_truth_z": 3.962432231986059,
+            "top_is_correct": 0.6
+          },
+          {
+            "detection_rate": 0.9,
+            "magnitude": 25,
+            "mean_truth_z": 4.965885232758312,
+            "top_is_correct": 0.9
+          },
+          {
+            "detection_rate": 0.9,
+            "magnitude": 30,
+            "mean_truth_z": 5.969338233530566,
+            "top_is_correct": 0.9
+          }
+        ],
+        "test_days": 7
+      }
+    ],
     "minimum_detectable_effect": [
       {
         "label": "clock_hour",
@@ -706,6 +1336,7 @@
     "train_days": 140
   },
   "figures": {
+    "anomaly_detection": "/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/ml/reports/anomaly_detection.png",
     "calibration": "/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/ml/reports/calibration.png",
     "pit_histogram": "/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/ml/reports/pit_histogram.png",
     "quantile_cost": "/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/ml/reports/quantile_cost.png",
@@ -717,7 +1348,7 @@
     "unstable": true,
     "zones_per_restaurant": 4.0
   },
-  "runtime_seconds": 30.7,
+  "runtime_seconds": 40.7,
   "seed": 20260916,
   "weibull_recovery": [
     {
