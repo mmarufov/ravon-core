@@ -2,7 +2,7 @@ import XCTest
 @testable import RavonCore
 
 /// Codable + status-gate behaviour for chat. Server-side RLS is verified by SQL
-/// in `.context/migrations/15_chat_rls_and_sender_role.sql`; this file confirms
+/// in `db/migrations/15_chat_rls_and_sender_role.sql`; this file confirms
 /// the Swift-side gate (`OrderStatus.isChatActive`) matches the RLS predicate.
 final class ChatRLSCodingTests: XCTestCase {
     func test_isChatActive_matchesServerActiveSet() {

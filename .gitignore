@@ -20,3 +20,11 @@ Config.local.xcconfig
 GoogleService-Info.plist
 service_role*
 *service_role*
+
+# Python build artifacts (ml/)
+*.egg-info/
+__pycache__/
+.venv/
+
+# Swift build output inside ml/export
+ml/export/.build/
