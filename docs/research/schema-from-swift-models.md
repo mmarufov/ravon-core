@@ -1,7 +1,7 @@
 # Postgres schema reconstructed from the RavonCore Swift Codable models
 
 Scope: all 21 files in `Sources/RavonCore/Models/`, cross-referenced against
-`.context/migrations/01–19` and `Sources/RavonCore/Services/`.
+`db/migrations/01–19` and `Sources/RavonCore/Services/`.
 
 All paths are repo-relative to `/Users/mmarufov/conductor/workspaces/ravon-core/bucharest`.
 

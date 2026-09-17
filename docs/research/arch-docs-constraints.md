@@ -7,7 +7,7 @@ Docs read in full:
 - `/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/.context/architecture/05-DISPATCH-ENGINE.md`
 - `/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/.context/architecture/08-EXPERIMENT-DESIGN-STUDY.md`
 - `/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/.context/architecture/10-POLYGLOT-RESTRUCTURE.md`
-- `/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/.context/migrations/README.md`
+- `/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/db/migrations/README.md`
 - `/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/README.md`
 - `/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/CLAUDE.md`
 - `/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/AGENTS.md`

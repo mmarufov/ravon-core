@@ -1,7 +1,7 @@
-# Postgres schema reconstructed from `.context/migrations/01..19`
+# Postgres schema reconstructed from `db/migrations/01..19`
 
 Source of truth for this document: the 19 `.sql` files plus `README.md` in
-`/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/.context/migrations/`.
+`/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/db/migrations/`.
 Every claim below cites `file:line`. Citations use the short form `NN:L`
 (e.g. `08:41` = `08_courier_heartbeat_and_sla_columns.sql` line 41).
 

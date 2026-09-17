@@ -42,7 +42,7 @@ import re
 import sys
 from collections import defaultdict
 
-MIGRATIONS = pathlib.Path(".context/migrations")
+MIGRATIONS = pathlib.Path("db/migrations")
 MODELS = pathlib.Path("Sources/RavonCore/Models")
 
 # `case foo = "bar"` or bare `case foo`

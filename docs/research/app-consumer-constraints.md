@@ -107,7 +107,7 @@ then demands a verification code the consumer was never shown.
 ### And the fix the report asks for does not work as stated
 
 The report's §3 item 2 asks for `p_delivery_mode` on `create_order` and says "then the §5
-hit disappears." **Verified incomplete.** `.context/migrations/10_dual_verification_codes_and_delivery_mode.sql:55-73`:
+hit disappears." **Verified incomplete.** `db/migrations/10_dual_verification_codes_and_delivery_mode.sql:55-73`:
 
 ```sql
 CREATE OR REPLACE FUNCTION sync_order_delivery_mode_from_address()

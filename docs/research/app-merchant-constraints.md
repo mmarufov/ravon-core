@@ -39,7 +39,7 @@ delivery_fee, min_order_amount`. Its header comment records *why*: a NULL `ratin
 `is_accepting_orders` / `restaurant_status` made the **consumer** fail decoding
 `Restaurant` with "ошибка загрузки".
 
-**This file is not in `ravon-core/.context/migrations/` (01–19).** It is a 20th migration
+**This file is not in `ravon-core/db/migrations/` (01–19).** It is a 20th migration
 living in a different repo, and it is the only `CREATE`-adjacent DDL any app repo owns.
 Two consequences for the extraction:
 
@@ -181,7 +181,7 @@ public func toggleAcceptingOrders(restaurantId: UUID, accepting: Bool) async thr
 ```
 
 Both paths land on the same RPC `set_accepting_orders(p_restaurant_id, p_accepting, p_until)`
-(`SupabaseService.swift:1042-1051`, defined in `.context/migrations/05_set_accepting_orders_with_until.sql`).
+(`SupabaseService.swift:1042-1051`, defined in `db/migrations/05_set_accepting_orders_with_until.sql`).
 The behaviour is **identical** for identical inputs; the Settings screen simply never
 offers a non-nil `until`. There is nothing to "collapse" server-side — the Kotlin
 extraction implements exactly one RPC and deletes one Swift alias. This shrinks the §5b

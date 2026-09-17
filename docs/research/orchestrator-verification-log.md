@@ -159,7 +159,7 @@ must therefore gate the whole monorepo, and env templates must never carry real 
 
 ### N3. Money is `numeric` on the server and `Double` in Swift, and `Order` has no payment method.
 Corrected from a first pass. The server side is already right:
-`.context/migrations/04_create_order_v3_and_validate_cart.sql:144` declares
+`db/migrations/04_create_order_v3_and_validate_cart.sql:144` declares
 `subtotal numeric := 0; v_total numeric;` and migration 12 rounds courier earnings with
 `round((v_delivery_fee * v_tier / 100.0)::numeric, 2)`. So Postgres stores and computes money as
 `numeric` with 2-decimal rounding.
@@ -180,7 +180,7 @@ Adding a payment method to the order model is therefore a prerequisite for the l
 a later nicety.
 
 ### N12. `create_order` has no idempotency key, and that is the concrete defect the order service exists to fix.
-`.context/migrations/04_…:127` — the signature is
+`db/migrations/04_…:127` — the signature is
 `create_order(p_restaurant_id, p_address_id, p_items, p_notes, p_scheduled_for)` and it
 `RETURNS uuid`. There is no client-supplied key and no dedupe on any natural key. The Swift side
 (`SupabaseService.swift:360`) just does
@@ -233,7 +233,7 @@ in the plan rather than silently following one of them.
 "iOS 17+", contradicting C5.
 
 ### N6. The RLS model is not reconstructible from ANY of the three sources. This is worse than the column gap.
-`grep -in "CREATE POLICY" .context/migrations/*.sql` yields policies for exactly four tables:
+`grep -in "CREATE POLICY" db/migrations/*.sql` yields policies for exactly four tables:
 `menu_items`, `menu_categories`, `courier_cancellation_log`, `chat_messages`.
 
 **There is no `CREATE POLICY ... ON orders` anywhere.** Nor on `profiles`, `addresses`,
@@ -256,7 +256,7 @@ Two consequences, and the first is good news:
    it is net-new work that the "reconstructed schema" deliverable does not cover.
 
 ### N7. `create_order` takes five parameters, not the four CLAUDE.md documents.
-`.context/migrations/04_create_order_v3_and_validate_cart.sql:127` —
+`db/migrations/04_create_order_v3_and_validate_cart.sql:127` —
 `create_order(p_restaurant_id uuid, p_address_id uuid, p_items jsonb, p_notes text, p_scheduled_for timestamptz)`.
 The grant at line 277 confirms the 5-arg signature. `CLAUDE.md` / `AGENTS.md` document
 `create_order(p_restaurant_id, p_address_id, p_items, p_notes)` — the scheduled-orders parameter

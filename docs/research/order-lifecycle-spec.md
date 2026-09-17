@@ -5,7 +5,7 @@ Extracted from:
 - `/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/Sources/RavonCore/Models/Order.swift` (`OrderStatus`, lines 3-117)
 - `/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/Tests/RavonCoreTests/OrderLifecycleInvariantTests.swift` (340 lines)
 
-Ground-truthed against the SQL in `/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/.context/migrations/` (migrations 01-19) and against the Swift service layer in `Sources/RavonCore/Services/SupabaseService.swift`.
+Ground-truthed against the SQL in `/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/db/migrations/` (migrations 01-19) and against the Swift service layer in `Sources/RavonCore/Services/SupabaseService.swift`.
 
 Every number below was produced by compiling and executing the real source, not by reading. Method: `sed`-extracted `OrderStatus` (Order.swift:1-117) concatenated verbatim with the whole of `OrderLifecycle.swift`, compiled with `swiftc -O`, and a probe printed every derived set. The 17-test suite was run with `swift test --filter OrderLifecycleInvariantTests` → **17 executed, 0 failures, 0.024s**.
 
@@ -356,7 +356,7 @@ The test suite hard-codes the same five as `knownMissing` (OrderLifecycleInvaria
 
 ### Verification 2 — against the actual SQL
 
-Every `CREATE [OR REPLACE] FUNCTION` across `.context/migrations/*.sql` was enumerated (33 functions). Result:
+Every `CREATE [OR REPLACE] FUNCTION` across `db/migrations/*.sql` was enumerated (33 functions). Result:
 
 | RPC | defining migration |
 |---|---|

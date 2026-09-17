@@ -9,7 +9,7 @@ matched exactly; where they didn't I say so. RavonCore verified in this worktree
 (`/Users/mmarufov/conductor/workspaces/ravon-core/bucharest`), whose `Sources/` is
 content-identical to the pinned `a1e9d6c8` the courier app builds against.
 
-**Migrations ARE readable** at `/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/.context/migrations/`
+**Migrations ARE readable** at `/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/db/migrations/`
 (01–19). The STATE-REPORT treats them as known-but-unquoted; I read them, which turned
 several of its inferences into hard facts and overturned two.
 
@@ -113,7 +113,7 @@ appear in the courier's 26-method call list. The report is right that dropping t
   `GRANT` lists. The most dangerous instance:
   `insert_courier_earning_for_cancel(p_order_id, p_courier_id, p_status_at_cancel,
   p_reason_code, p_tier_override, p_earning_type_override)` at
-  `.context/migrations/12_tiered_earnings_columns_and_helpers.sql:60-99` — `SECURITY
+  `db/migrations/12_tiered_earnings_columns_and_helpers.sql:60-99` — `SECURITY
   DEFINER`, **no `auth.uid()` check at all**, takes an arbitrary `p_courier_id` and an
   **unbounded `p_tier_override`**, and writes `courier_earnings` with
   `total_earned = round(delivery_fee * tier / 100.0, 2)`. Tier 100000 mints 1000× the fee

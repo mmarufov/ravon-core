@@ -190,7 +190,14 @@ class DetectionOutcome:
     top_is_correct: bool
     #: Whether the representative was the exact singlet rather than a pair.
     representative: str | None
+    #: Largest Z-score among all firing segments, correct or not.
     max_z: float | None
+    #: Z-score of the injected segment itself, whether or not it cleared the gates.
+    #: This is the diagnostic that separates "the signal was too small" from "the
+    #: signal was there and the gates or the ranking lost it".
+    truth_z: float | None = None
+    truth_passed_z_gate: bool = False
+    truth_passed_abs_gate: bool = False
 
 
 def evaluate_detection(
@@ -204,9 +211,15 @@ def evaluate_detection(
     """Run the full pipeline — segment, dual gate, cluster — and grade the result."""
     metric = metric or METRICS[injection.metric]
     metrics = segment_daily_metrics(df)
-    anomalies = detect_day(metrics, test_day, metric, windows, sigma)
+    scored = detect_day(metrics, test_day, metric, windows, sigma, return_all=True)
+    truth_z, truth_z_gate, truth_abs_gate = _truth_diagnostics(
+        scored, injection, metric, sigma
+    )
+    anomalies = scored[scored["fired"]].drop(columns=["fired"]) if not scored.empty else scored
     if anomalies.empty:
-        return DetectionOutcome(False, None, 0, False, None, None)
+        return DetectionOutcome(
+            False, None, 0, False, None, None, truth_z, truth_z_gate, truth_abs_gate
+        )
 
     clusters = cluster_anomalies(df[df["day"] == test_day], anomalies)
     rank = None
@@ -222,6 +235,28 @@ def evaluate_detection(
         top_is_correct=injection.is_correct(top.representative),
         representative=top.representative,
         max_z=float(anomalies["z_score"].max()),
+        truth_z=truth_z,
+        truth_passed_z_gate=truth_z_gate,
+        truth_passed_abs_gate=truth_abs_gate,
+    )
+
+
+def _truth_diagnostics(
+    scored: pd.DataFrame, injection: Injection, metric: Metric, sigma: float
+) -> tuple[float | None, bool, bool]:
+    """Z-score and gate outcomes for the *singlet* naming the injected entity."""
+    if scored.empty:
+        return None, False, False
+    singlets = scored[
+        scored["segment"].isin(injection.truth_segments) & scored["level"].eq(1)
+    ]
+    if singlets.empty:
+        return None, False, False
+    row = singlets.loc[singlets["z_score"].idxmax()]
+    return (
+        float(row["z_score"]),
+        bool(row["z_score"] >= sigma),
+        bool(row["abs_anom_amt"] >= metric.absolute_threshold),
     )
 
 
@@ -251,6 +286,7 @@ def magnitude_sweep(
                     "top_is_correct": outcome.top_is_correct,
                     "n_clusters": outcome.n_clusters,
                     "max_z": outcome.max_z,
+                    "truth_z": outcome.truth_z,
                 }
             )
     return pd.DataFrame(rows)
@@ -291,6 +327,7 @@ def detection_latency(
                 "detected": outcome.detected,
                 "rank": outcome.rank,
                 "max_z": outcome.max_z,
+                "truth_z": outcome.truth_z,
             }
         )
         if outcome.detected and latency is None:

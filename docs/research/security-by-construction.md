@@ -1,7 +1,7 @@
 # Security by construction — translating the two gstack reports into rebuild invariants
 
 Scope: both files in `.gstack/security-reports/` read in full, all 19 files in
-`.context/migrations/`, `Sources/RavonCore/Services/*`, `scripts/scan_secrets.py`,
+`db/migrations/`, `Sources/RavonCore/Services/*`, `scripts/scan_secrets.py`,
 `.github/workflows/ci.yml`. Every claim below is cited to `file:line`. Where the answer
 requires the live database, it is marked **UNKNOWN — needs live introspection** rather than
 guessed, because the project is gone.
@@ -53,7 +53,7 @@ never touched. The merchant order-transition path is still a direct table UPDATE
 those unfixed policies.
 
 **C3. S3 was not patched, and provably could not have been from this repo.**
-`grep -i "REVOKE" .context/migrations/*.sql` returns **zero matches**. Two of the three
+`grep -i "REVOKE" db/migrations/*.sql` returns **zero matches**. Two of the three
 functions named in S3 (`find_nearby_couriers`, `auto_cancel_stale_orders`) exist in no
 migration at all — they were dashboard-created, corroborated by
 `.context/architecture/12-BACKEND-INVENTORY.md:28`. The third, `fetch_available_orders`, was
@@ -312,7 +312,7 @@ address snapshot. This is the same PII class S3 flagged, reachable by an authent
 without touching any anon grant.
 
 ### N8 — no quantity or money domain constraints anywhere — HIGH
-`grep -i "CHECK (\|ADD CONSTRAINT" .context/migrations/*.sql` yields exactly five
+`grep -i "CHECK (\|ADD CONSTRAINT" db/migrations/*.sql` yields exactly five
 constraints: `cancellation_reason_code_valid` (09:20), `courier_earnings_type_valid`
 (12:27), `chat_messages_sender_role_valid` (15:15), `addresses_delivery_mode_valid` (10:20),
 `orders_delivery_mode_valid` (10:29). **There is no `CHECK (quantity > 0)` on
@@ -349,7 +349,7 @@ Supabase's bootstrap `GRANT ALL ON SCHEMA public TO anon, authenticated` would p
 user can create a function or operator in `public` that an unqualified reference inside a
 definer function resolves to, executing attacker code as the function owner. Whether that
 grant existed is **UNKNOWN — needs live introspection**. The migrations' own hardening note
-(`.context/migrations/README.md:138-141`) shows the author treated `search_path` as a
+(`db/migrations/README.md:138-141`) shows the author treated `search_path` as a
 lint item to satisfy (`function_search_path_mutable`) rather than as a privilege boundary;
 setting it to `public` satisfies the linter and preserves the hijack.
 
@@ -395,7 +395,7 @@ Two second-order consequences worth carrying into the rebuild:
 - **`role` also lands in the JWT.** GoTrue mirrors `raw_user_meta_data` into the access
   token's `user_metadata` claim, and `PUT /auth/v1/user` with `{"data":{"role":…}}` lets the
   user rewrite it at any time. Nothing in this repo reads it — verified:
-  `grep "auth.jwt\|user_metadata\|app_metadata" .context/migrations/*.sql Sources/ Tests/`
+  `grep "auth.jwt\|user_metadata\|app_metadata" db/migrations/*.sql Sources/ Tests/`
   matches only migration 18's own comments and body. That is luck, not design. In the
   Kotlin service it must be structurally impossible (rule R18).
 - **Migration 19 also blocks legitimate demotion.** Because the trigger fires for *any*

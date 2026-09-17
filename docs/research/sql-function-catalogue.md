@@ -1,4 +1,4 @@
-# SQL function catalogue — `.context/migrations/01–19`
+# SQL function catalogue — `db/migrations/01–19`
 
 Compiled 2026-09-16 by direct read of all 19 migration files (2,555 lines) plus the
 21 Swift `rpc(...)` call sites. Every claim below cites `file:line`. Nothing here is
@@ -568,7 +568,7 @@ Tables listed under WRITES include writes performed by helper functions the body
 | `LANGUAGE plpgsql` | **30** | the rest |
 | `search_path = public, extensions` | **3** | `compute_eta_minutes`, `update_courier_heartbeat`, `fetch_available_orders` (the PostGIS callers) |
 
-`.context/migrations/README.md:138-141` claims the 5 `search_path`-less helpers were tightened
+`db/migrations/README.md:138-141` claims the 5 `search_path`-less helpers were tightened
 post-hoc with `ALTER FUNCTION ... SET search_path = public` to clear the
 `function_search_path_mutable` lint. That `ALTER` exists in **no migration file**, so whether
 it was ever applied is **UNKNOWN — needs live introspection**. The Kotlin/SQL rebuild should
@@ -671,7 +671,7 @@ call sites anywhere in `Sources/`.
 Verified exhaustively: the 21 Swift RPC names minus the 34 migration function names leaves
 exactly these 3. Also verified there is **no other SQL anywhere** — `find . -name '*.sql'`
 across `ravon-core`, `ravon-consumer`, `ravon-courier` and `ravon-merchant` returns only
-`.context/migrations/*` plus vendored `supabase-swift` fixtures under `.build/checkouts/`.
+`db/migrations/*` plus vendored `supabase-swift` fixtures under `.build/checkouts/`.
 The three app repos contain zero `.sql` files.
 
 **Correction to the inventory's footnote.** `12-BACKEND-INVENTORY.md:64` says these

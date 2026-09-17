@@ -78,7 +78,7 @@ mechanism**, so a `v2` is permanent.
 
 ### 0.3 CORRECTION to `sql-function-catalogue.md` §6.2: the `cancellation_reason_code` CHECK has **18** values, not 17
 
-`.context/migrations/09_cancellation_reason_code_and_courier_cancel_log.sql:20-36`. Counted
+`db/migrations/09_cancellation_reason_code_and_courier_cancel_log.sql:20-36`. Counted
 from the literal list: 2 consumer + 4 restaurant + 5 courier + 2 system + 4 scheduled-order +
 1 no-show = **18**. `Sources/RavonCore/Models/CancellationReason.swift:8-37` also declares
 **18** cases. The two are an **exact match** — there is no Swift↔SQL drift on this enum, which
@@ -120,7 +120,7 @@ stand.
 
 ### 0.7 CONFIRMED and sharpened: `RESTAURANT_CLOSED` has **three** distinct causes, not two
 
-`.context/migrations/04_create_order_v3_and_validate_cart.sql`:
+`db/migrations/04_create_order_v3_and_validate_cart.sql`:
 
 - `:153-157` — `SELECT * INTO r … FOR UPDATE; IF NOT FOUND OR r.restaurant_status = 'closed' THEN RAISE … 'RESTAURANT_CLOSED'`
   → conflates **restaurant row does not exist** with **restaurant is closed**.
@@ -397,7 +397,7 @@ one-line rule that prevents a class of field failure the current code is wide op
 ### A.3.4 `CancellationReason` — 18 values, exact match to Swift **and** SQL
 
 Verified against `Sources/RavonCore/Models/CancellationReason.swift:8-37` (18 cases) and
-`.context/migrations/09_…sql:20-36` (18 literals). See correction §0.3.
+`db/migrations/09_…sql:20-36` (18 literals). See correction §0.3.
 
 ```proto
 enum CancellationReason {

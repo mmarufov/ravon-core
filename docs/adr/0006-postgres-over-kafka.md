@@ -120,6 +120,6 @@ Until one of those is true, a broker would be infrastructure carrying no load.
 ## Verification
 
 Partially verifiable. `order_status_history`, the four triggers and the three `pg_cron`
-jobs exist in the migrations under `.context/migrations/` and were running against the
+jobs exist in the migrations under `db/migrations/` and were running against the
 Supabase project before it was deleted; **there is no live system to observe today**. The
 throughput figures above are arithmetic, not a benchmark, and are labelled as such.

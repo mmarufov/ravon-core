@@ -303,10 +303,14 @@ def detect_day(
     windows: Windows = Windows(),
     sigma: float = 3.0,
     min_baseline_days: int = 10,
+    return_all: bool = False,
 ) -> pd.DataFrame:
     """Run the dual gate over every segment for the test window ending on `day`.
 
     Returns the segments that passed **both** gates, with the evidence for each.
+    With `return_all=True`, returns every *testable* segment instead, carrying a
+    `fired` column — which is what lets a validation harness ask "was the signal too
+    small, or did the gates throw it away?".
     """
     baseline_first, baseline_last = windows.baseline_range(day)
     test_first, test_last = windows.test_range(day)
@@ -355,9 +359,11 @@ def detect_day(
         gate_z = joined["z_score"].abs() >= sigma
         gate_abs = joined["abs_anom_amt"].abs() >= metric.absolute_threshold
 
-    fired = joined[gate_z & gate_abs].copy()
+    joined = joined.assign(fired=gate_z & gate_abs)
+    fired = joined if return_all else joined[joined["fired"]].copy()
     if fired.empty:
         return _empty_anomaly_frame()
+    fired = fired.copy()
 
     # DoorDash's ranking. The `level ** 1.2` divisor is what makes a one-dimensional
     # description outrank a two-dimensional one explaining the same excess: given the
@@ -381,7 +387,7 @@ def _empty_anomaly_frame() -> pd.DataFrame:
             "unassigned_rate", "sum_delivery_minutes", "mean_delivery_minutes",
             "days_present", "baseline_mean",
             "baseline_std", "baseline_n", "delta", "z_score", "rel_amt",
-            "abs_anom_amt", "score", "metric", "test_day", "test_first_day",
+            "abs_anom_amt", "score", "fired", "metric", "test_day", "test_first_day",
             "baseline_first_day", "baseline_last_day",
         ]
     )

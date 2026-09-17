@@ -2,7 +2,7 @@
 
 **Method.** This document is derived *only* from what the Swift code sends to and decodes
 from PostgREST/Realtime. It is an independent third source: it does not read the
-migrations to establish facts. Where I did open `.context/migrations/*.sql`, it is marked
+migrations to establish facts. Where I did open `db/migrations/*.sql`, it is marked
 explicitly as **CROSS-CHECK** and is never load-bearing for a column claim.
 
 Every line reference is `path:line` against the working tree at the time of writing.
@@ -21,9 +21,9 @@ Scope read in full:
 
 ### 0.1 The Swift call sites are the *primary* schema source, not a secondary one
 
-**CROSS-CHECK:** `.context/migrations/` contains exactly **one** `CREATE TABLE` across all
+**CROSS-CHECK:** `db/migrations/` contains exactly **one** `CREATE TABLE` across all
 19 files — `courier_cancellation_log` in
-`.context/migrations/09_cancellation_reason_code_and_courier_cancel_log.sql:39`.
+`db/migrations/09_cancellation_reason_code_and_courier_cancel_log.sql:39`.
 Every other table (orders, order_items, restaurants, menu_items, menu_categories,
 addresses, profiles, chat_messages, courier_locations, courier_earnings,
 order_status_history, restaurant_hours, modifier_groups, modifier_options,
@@ -37,7 +37,7 @@ the schema.
 ### 0.2 Three RPCs have no definition anywhere in the repo — only a Swift call site
 
 `add_tip`, `find_nearby_couriers`, `get_merchant_stats` return zero hits in
-`.context/migrations/*.sql`. Their wire contract exists *exclusively* at
+`db/migrations/*.sql`. Their wire contract exists *exclusively* at
 `SupabaseService.swift:663`, `:711`, `:1453`. Section 3 is the only surviving spec.
 
 ### 0.3 `orders` is written directly by the client in SIX places — the "no client write
@@ -528,7 +528,7 @@ Swift defaults applied client-side before the wire (Kotlin must decide whether t
 them as client or server defaults):
 - `find_nearby_couriers`: `radiusKm = 5.0` (`:704`)
 - `fetch_available_orders`: `radiusKm = 10.0` (`:787`) — **CROSS-CHECK:** the SQL default
-  is `50.0` (`.context/migrations/13_...sql:718`). Swift always passes explicitly, so the
+  is `50.0` (`db/migrations/13_...sql:718`). Swift always passes explicitly, so the
   divergence is latent, not live.
 
 ### 3.1 `validate_cart` return jsonb — exact shape
@@ -591,7 +591,7 @@ the 17 listed at `:107-124`. Any RPC the Kotlin service reimplements must keep e
    `SupabaseService.swift` lets the raw `PostgrestError` propagate, so the entire typed
    taxonomy at `ServiceError:26-38` is unreachable in the shipped apps.
 2. `ROLE_CHANGE_FORBIDDEN` is **not** in the switch (`:106-125`), despite
-   `.context/migrations/19_lock_down_profile_role.sql:14` claiming it was added
+   `db/migrations/19_lock_down_profile_role.sql:14` claiming it was added
    "so the Swift `ServiceError.from(serverError:)` decoder can surface a typed
    `.unauthorized`". It returns `nil`.
 
@@ -768,7 +768,7 @@ Two path-safety notes for the extraction:
 `AuthService.swift`:
 - `client.auth.signUp(email:password:data: ["full_name", "role"])` (`:65-72`) — the role
   is **client-supplied** and lands in `auth.users.raw_user_meta_data`.
-  **CROSS-CHECK:** `.context/migrations/18_handle_new_user_trigger.sql:26` copies it
+  **CROSS-CHECK:** `db/migrations/18_handle_new_user_trigger.sql:26` copies it
   verbatim into `public.profiles.role`, and `19_lock_down_profile_role.sql` blocks only
   subsequent *UPDATEs*. A client can therefore self-assign `role='merchant'` at signup.
   That is a live privilege-escalation path the extraction must close (role should be

@@ -1,0 +1,808 @@
+{
+  "anomaly": {
+    "dimensions": [
+      "restaurant_index",
+      "clock_hour",
+      "zone"
+    ],
+    "dual_gate": [
+      {
+        "absolute_threshold": 120.0,
+        "dual_gate_per_day": 0.21511627906976744,
+        "metric": "mean_delivery_minutes",
+        "min_volume": 10,
+        "removed_by_absolute_gate_pct": 0.0,
+        "z_gate_only_per_day": 0.21511627906976744
+      },
+      {
+        "absolute_threshold": 120.0,
+        "dual_gate_per_day": 0.7441860465116279,
+        "metric": "mean_delivery_minutes",
+        "min_volume": 3,
+        "removed_by_absolute_gate_pct": 0.7751937984496138,
+        "z_gate_only_per_day": 0.75
+      },
+      {
+        "absolute_threshold": 5.0,
+        "dual_gate_per_day": 0.3488372093023256,
+        "metric": "unassigned_rate",
+        "min_volume": 20,
+        "removed_by_absolute_gate_pct": 56.52173913043479,
+        "z_gate_only_per_day": 0.8023255813953488
+      },
+      {
+        "absolute_threshold": 5.0,
+        "dual_gate_per_day": 0.4011627906976744,
+        "metric": "unassigned_rate",
+        "min_volume": 3,
+        "removed_by_absolute_gate_pct": 85.41226215644821,
+        "z_gate_only_per_day": 2.75
+      }
+    ],
+    "false_positive_rate": [
+      {
+        "clustered_incidents": 35,
+        "days_evaluated": 172,
+        "incidents_per_day": 0.20348837209302326,
+        "metric": "mean_delivery_minutes",
+        "per_test_false_positive_rate": 0.0027460293899361733,
+        "segment_firings": 37,
+        "segment_firings_per_day": 0.21511627906976744,
+        "sigma": 3.0,
+        "tests_run": 13474
+      },
+      {
+        "clustered_incidents": 58,
+        "days_evaluated": 172,
+        "incidents_per_day": 0.3372093023255814,
+        "metric": "unassigned_rate",
+        "per_test_false_positive_rate": 0.00445302063232893,
+        "segment_firings": 60,
+        "segment_firings_per_day": 0.3488372093023256,
+        "sigma": 3.0,
+        "tests_run": 13474
+      }
+    ],
+    "minimum_detectable_effect": [
+      {
+        "label": "clock_hour",
+        "mde": [
+          18.263332037678904,
+          10.544339668253432,
+          6.902890669013844,
+          4.881080801849032
+        ],
+        "orders_per_day": 80.0,
+        "test_days": [
+          1,
+          3,
+          7,
+          14
+        ]
+      },
+      {
+        "label": "restaurant_index",
+        "mde": [
+          36.52666407535781,
+          21.088679336506864,
+          13.805781338027687,
+          9.762161603698065
+        ],
+        "orders_per_day": 20.0,
+        "test_days": [
+          1,
+          3,
+          7,
+          14
+        ]
+      },
+      {
+        "label": "zone",
+        "mde": [
+          20.702918798983003,
+          11.9528357416038,
+          7.824967793610433,
+          5.533087789428274
+        ],
+        "orders_per_day": 62.2568093385214,
+        "test_days": [
+          1,
+          3,
+          7,
+          14
+        ]
+      }
+    ],
+    "per_order_sd_minutes": 54.45073590919971,
+    "segments": {
+      "by_level": {
+        "1": 19,
+        "2": 96
+      },
+      "testable_on_a_typical_day": 79,
+      "total": 115
+    },
+    "sigma": {
+      "bonferroni_sigma_for_one_alarm_per_day": 2.23653945714085,
+      "chosen": 3.0,
+      "doordash": 6.0,
+      "expected_false_alarms_per_day": {
+        "3.0": 0.10664194449877736,
+        "3.5": 0.018377697243806477,
+        "4.0": 0.002502028104816469,
+        "6.0": 7.794042395797786e-08
+      },
+      "tests_per_day": 79
+    }
+  },
+  "dataset": {
+    "days": 200,
+    "delivered_rows": 46329,
+    "orders_per_day": 240,
+    "restaurants": 12,
+    "rows": 48000,
+    "service_hours": [
+      11,
+      12,
+      13
+    ],
+    "simulator_config": {
+      "cityCenterLat": 38.5598,
+      "cityCenterLon": 68.787,
+      "cityRadiusKm": 6,
+      "courierCount": 24,
+      "dayCount": 200,
+      "deliveredRows": 46329,
+      "dispatchIntervalSeconds": 30,
+      "dispatcher": "optimal-batch",
+      "durationMinutes": 180,
+      "generator": "ml/export/main.swift (RavonCore MarketplaceSimulator)",
+      "latent": {
+        "courierSpeedSpread": 0.3,
+        "prepNoiseSigmaMinutes": 3,
+        "restaurantPrepBiasSigmaMinutes": 4,
+        "trafficAmplitude": 0.35,
+        "trafficPeriodMinutes": 90
+      },
+      "naiveEtaChecks": [
+        {
+          "biasMinutes": 36.5580647785861,
+          "delivered": 7010,
+          "label": "reference config (240 orders / 180 min / 24 couriers), seeds 1-30, latent=realistic",
+          "maeMinutes": 36.98447644356234,
+          "meanActualMinutes": 67.30037499196803,
+          "meanNaiveMinutes": 30.742310213381987,
+          "sdMinutes": 50.500491015019904,
+          "seeds": 30
+        },
+        {
+          "biasMinutes": 23.44948121821618,
+          "delivered": 7200,
+          "label": "reference config (240 orders / 180 min / 24 couriers), seeds 1-30, latent=none",
+          "maeMinutes": 23.44948121821618,
+          "meanActualMinutes": 54.48717954867042,
+          "meanNaiveMinutes": 31.037698330454102,
+          "sdMinutes": 37.89247575537956,
+          "seeds": 30
+        },
+        {
+          "biasMinutes": 36.89437777058368,
+          "delivered": 46329,
+          "label": "export config == default config, all 200 exported days, latent=realistic",
+          "maeMinutes": 37.35646253353398,
+          "meanActualMinutes": 67.60261106112357,
+          "meanNaiveMinutes": 30.708233290539763,
+          "sdMinutes": 50.77037423326299,
+          "seeds": 200
+        }
+      ],
+      "nominalSpeedKmh": 18,
+      "orderCountPerDay": 240,
+      "restaurantCount": 12,
+      "rows": 48000,
+      "serviceDayStartHour": 11,
+      "zoneDivisions": 2
+    },
+    "unassigned_rate": 0.034812500000000024,
+    "zones": 4
+  },
+  "decision": {
+    "cost_constants": {
+      "derived_quantile": 0.8,
+      "early": 1.0,
+      "late": 4.0,
+      "ratio": 4.0,
+      "rationale": "late minutes drive support contacts, credits and churn; early minutes cost a short wait at the door"
+    },
+    "policies": [
+      {
+        "label": "mean of the predictive distribution (unbiased)",
+        "late_rate": 0.40254023237352965,
+        "level": 0.5,
+        "mean_actual_minutes": 67.36191793894783,
+        "mean_cost": 57.37266500916621,
+        "mean_earliness_when_early": 20.554424578780644,
+        "mean_lateness_when_late": 28.00479284440172,
+        "mean_quote_minutes": 68.3693038523239,
+        "p90_lateness_minutes": 38.36497796974663
+      },
+      {
+        "label": "median (p50)",
+        "late_rate": 0.4311178465757379,
+        "level": 0.5,
+        "mean_actual_minutes": 67.36191793894783,
+        "mean_cost": 60.139759405730715,
+        "mean_earliness_when_early": 18.800591366490757,
+        "mean_lateness_when_late": 28.672229006660686,
+        "mean_quote_minutes": 65.6961292152887,
+        "p90_lateness_minutes": 43.050070704262
+      },
+      {
+        "label": "derived quantile (p80)",
+        "late_rate": 0.19643501479396694,
+        "level": 0.8,
+        "mean_actual_minutes": 67.36191793894783,
+        "mean_cost": 48.89102803042936,
+        "mean_earliness_when_early": 34.4768739546504,
+        "mean_lateness_when_late": 26.963903741056885,
+        "mean_quote_minutes": 89.76967181798913,
+        "p90_lateness_minutes": 14.388415451073623
+      },
+      {
+        "label": "p90 (over-cautious)",
+        "late_rate": 0.1235476654398499,
+        "level": 0.9,
+        "mean_actual_minutes": 67.36191793894783,
+        "mean_cost": 51.9371921652681,
+        "mean_earliness_when_early": 44.682806340097436,
+        "mean_lateness_when_late": 25.85002757500539,
+        "mean_quote_minutes": 103.33055731197764,
+        "p90_lateness_minutes": 4.04490134296145
+      }
+    ],
+    "sweeps": [
+      {
+        "cost_at_argmin": 34.51388343970155,
+        "cost_at_derived": 34.81871316899658,
+        "derived": 0.6666666666666666,
+        "empirical_argmin": 0.61,
+        "ratio": 2.0
+      },
+      {
+        "cost_at_argmin": 42.6541769263012,
+        "cost_at_derived": 42.782322910008475,
+        "derived": 0.75,
+        "empirical_argmin": 0.72,
+        "ratio": 3.0
+      },
+      {
+        "cost_at_argmin": 48.87086255527991,
+        "cost_at_derived": 48.89102803042936,
+        "derived": 0.8,
+        "empirical_argmin": 0.79,
+        "ratio": 4.0
+      },
+      {
+        "cost_at_argmin": 53.86897165755786,
+        "cost_at_derived": 53.86930172701657,
+        "derived": 0.8333333333333334,
+        "empirical_argmin": 0.84,
+        "ratio": 5.0
+      },
+      {
+        "cost_at_argmin": 61.51832384061108,
+        "cost_at_derived": 61.734302801500846,
+        "derived": 0.875,
+        "empirical_argmin": 0.9,
+        "ratio": 7.0
+      },
+      {
+        "cost_at_argmin": 67.29282235534905,
+        "cost_at_derived": 67.90574495750641,
+        "derived": 0.9,
+        "empirical_argmin": 0.93,
+        "ratio": 9.0
+      }
+    ]
+  },
+  "eta": {
+    "cell_table": [
+      {
+        "cell": 0,
+        "location": 6.4986445999999995,
+        "mean_actual": 25.744593693444138,
+        "n": 1083,
+        "r_squared": 0.9803103894634791,
+        "scale": 21.439539704006183,
+        "score": -2.1341431764424184,
+        "shape": 2.636158163701814
+      },
+      {
+        "cell": 1,
+        "location": 8.875055634973073,
+        "mean_actual": 29.100141977818854,
+        "n": 1082,
+        "r_squared": 0.9716856902566927,
+        "scale": 22.583604419766647,
+        "score": -1.6548791874429416,
+        "shape": 2.611763836332282
+      },
+      {
+        "cell": 2,
+        "location": 12.8756712,
+        "mean_actual": 30.782774284395195,
+        "n": 1083,
+        "r_squared": 0.9824346708901165,
+        "scale": 20.144013174781875,
+        "score": -1.4297206104398035,
+        "shape": 2.3809766514594184
+      },
+      {
+        "cell": 3,
+        "location": 12.724780599999999,
+        "mean_actual": 31.884953650646953,
+        "n": 1082,
+        "r_squared": 0.9728111166260448,
+        "scale": 21.407360721325123,
+        "score": -1.2506497221896773,
+        "shape": 2.64695724512162
+      },
+      {
+        "cell": 4,
+        "location": 10.198811,
+        "mean_actual": 34.05086649722736,
+        "n": 1082,
+        "r_squared": 0.953351411999146,
+        "scale": 26.496522760076306,
+        "score": -1.0968519957226934,
+        "shape": 3.036338366770013
+      },
+      {
+        "cell": 5,
+        "location": 14.8152186,
+        "mean_actual": 36.072980230840265,
+        "n": 1083,
+        "r_squared": 0.9582151985923862,
+        "scale": 23.647868087008778,
+        "score": -0.9617334249206143,
+        "shape": 2.398898462629483
+      },
+      {
+        "cell": 6,
+        "location": 13.3560574,
+        "mean_actual": 36.38473658040665,
+        "n": 1082,
+        "r_squared": 0.9584224359868241,
+        "scale": 25.59145751717908,
+        "score": -0.8361730141107742,
+        "shape": 2.8117686347270547
+      },
+      {
+        "cell": 7,
+        "location": 12.630828,
+        "mean_actual": 38.025612975970425,
+        "n": 1082,
+        "r_squared": 0.9473219612348217,
+        "scale": 28.19961789368311,
+        "score": -0.717571101493791,
+        "shape": 2.9215976969920288
+      },
+      {
+        "cell": 8,
+        "location": 17.6871086,
+        "mean_actual": 38.8172155401662,
+        "n": 1083,
+        "r_squared": 0.9511795943062676,
+        "scale": 23.41600995149622,
+        "score": -0.61183949331305,
+        "shape": 2.301720405448289
+      },
+      {
+        "cell": 9,
+        "location": 17.2011658,
+        "mean_actual": 40.62440404805915,
+        "n": 1082,
+        "r_squared": 0.9638684839694005,
+        "scale": 26.14402106628838,
+        "score": -0.5134620173190723,
+        "shape": 2.369165187388677
+      },
+      {
+        "cell": 10,
+        "location": 19.5307434,
+        "mean_actual": 40.84465381348108,
+        "n": 1083,
+        "r_squared": 0.9707650835392967,
+        "scale": 23.81434845758851,
+        "score": -0.4170346323211299,
+        "shape": 2.354690788100324
+      },
+      {
+        "cell": 11,
+        "location": 12.9055024,
+        "mean_actual": 42.088531238447324,
+        "n": 1082,
+        "r_squared": 0.9485677967833148,
+        "scale": 32.383736505687864,
+        "score": -0.3173668755105185,
+        "shape": 3.123521840744042
+      },
+      {
+        "cell": 12,
+        "location": 19.0428308,
+        "mean_actual": 43.36969818853974,
+        "n": 1082,
+        "r_squared": 0.9682588868798466,
+        "scale": 26.96231875535433,
+        "score": -0.2211279987008619,
+        "shape": 2.406291714897053
+      },
+      {
+        "cell": 13,
+        "location": 13.8613552,
+        "mean_actual": 45.55932587257618,
+        "n": 1083,
+        "r_squared": 0.9491657205862039,
+        "scale": 35.20793786372252,
+        "score": -0.12498575544699883,
+        "shape": 2.902408745172232
+      },
+      {
+        "cell": 14,
+        "location": 21.8892898,
+        "mean_actual": 46.46987296672828,
+        "n": 1082,
+        "r_squared": 0.9573163754745262,
+        "scale": 27.21861210247717,
+        "score": -0.029410537352402538,
+        "shape": 2.1473934336960983
+      },
+      {
+        "cell": 15,
+        "location": 19.125660399999997,
+        "mean_actual": 48.7736311275416,
+        "n": 1082,
+        "r_squared": 0.9624772547697048,
+        "scale": 32.97054312334985,
+        "score": 0.06436129513758633,
+        "shape": 2.320787414409886
+      },
+      {
+        "cell": 16,
+        "location": 16.86209348690017,
+        "mean_actual": 51.15843212373038,
+        "n": 1083,
+        "r_squared": 0.9249502668331745,
+        "scale": 38.084987940033514,
+        "score": 0.15314898551506748,
+        "shape": 2.4732204715107136
+      },
+      {
+        "cell": 17,
+        "location": 23.1537446,
+        "mean_actual": 54.48750222735675,
+        "n": 1082,
+        "r_squared": 0.9600111259988025,
+        "scale": 34.64772416415199,
+        "score": 0.24826232248627877,
+        "shape": 1.882539594525943
+      },
+      {
+        "cell": 18,
+        "location": 22.5986334,
+        "mean_actual": 58.01205729205176,
+        "n": 1082,
+        "r_squared": 0.9687075751598297,
+        "scale": 39.17735984483037,
+        "score": 0.3435503106257961,
+        "shape": 1.8748176203632083
+      },
+      {
+        "cell": 19,
+        "location": 20.7286072,
+        "mean_actual": 63.52984012927054,
+        "n": 1083,
+        "r_squared": 0.9177486413998021,
+        "scale": 46.615839527051016,
+        "score": 0.4420089873958221,
+        "shape": 1.7941595295209778
+      },
+      {
+        "cell": 20,
+        "location": 19.9721746,
+        "mean_actual": 70.07108670979667,
+        "n": 1082,
+        "r_squared": 0.9243720209616886,
+        "scale": 54.743170270861626,
+        "score": 0.5397171321912743,
+        "shape": 1.755466973263365
+      },
+      {
+        "cell": 21,
+        "location": 23.908795400000002,
+        "mean_actual": 78.23975873499539,
+        "n": 1083,
+        "r_squared": 0.9515871498101325,
+        "scale": 58.82848936902004,
+        "score": 0.6374178111608064,
+        "shape": 1.599343830582091
+      },
+      {
+        "cell": 22,
+        "location": 25.285607199999998,
+        "mean_actual": 84.55090439926062,
+        "n": 1082,
+        "r_squared": 0.977557845843063,
+        "scale": 64.38596249627247,
+        "score": 0.7416798431406777,
+        "shape": 1.552165874775787
+      },
+      {
+        "cell": 23,
+        "location": 23.313612,
+        "mean_actual": 95.20995146950092,
+        "n": 1082,
+        "r_squared": 0.9624789090015609,
+        "scale": 78.1768387680117,
+        "score": 0.8469213256524508,
+        "shape": 1.4997080800775429
+      },
+      {
+        "cell": 24,
+        "location": 19.9518788,
+        "mean_actual": 109.4943106186519,
+        "n": 1083,
+        "r_squared": 0.9733805199420267,
+        "scale": 99.27867529125747,
+        "score": 0.9638249415449718,
+        "shape": 1.7071515085621465
+      },
+      {
+        "cell": 25,
+        "location": 22.928119276117055,
+        "mean_actual": 118.73654646950094,
+        "n": 1082,
+        "r_squared": 0.9837641859384161,
+        "scale": 106.92918630972017,
+        "score": 1.0900532343732356,
+        "shape": 1.6750115361573044
+      },
+      {
+        "cell": 26,
+        "location": 28.864300772361233,
+        "mean_actual": 136.3531925693161,
+        "n": 1082,
+        "r_squared": 0.9878566971541924,
+        "scale": 120.90811313849308,
+        "score": 1.231950074929567,
+        "shape": 1.5764219638772188
+      },
+      {
+        "cell": 27,
+        "location": 19.7308055782161,
+        "mean_actual": 148.97287921514314,
+        "n": 1083,
+        "r_squared": 0.9834088660599939,
+        "scale": 146.41314115958403,
+        "score": 1.3914268503793426,
+        "shape": 1.957174587781661
+      },
+      {
+        "cell": 28,
+        "location": 0.0,
+        "mean_actual": 163.44390374306838,
+        "n": 1082,
+        "r_squared": 0.9780723843462218,
+        "scale": 184.09296956477897,
+        "score": 1.6031543409958489,
+        "shape": 2.6414737694732584
+      },
+      {
+        "cell": 29,
+        "location": 0.0,
+        "mean_actual": 190.2619001569714,
+        "n": 1083,
+        "r_squared": 0.9553547708546881,
+        "scale": 213.3597830289762,
+        "score": 2.019538714556921,
+        "shape": 3.1406220374341443
+      }
+    ],
+    "crps_reduction_vs_naive_pct": 55.82398201540762,
+    "empirical_crps_floor": 26.073340201000626,
+    "features_at_assignment": [
+      "quoted_prep_minutes",
+      "haul_km",
+      "created_at_minutes",
+      "free_couriers_now",
+      "inflight_now",
+      "pending_now",
+      "recent_arrivals_30m",
+      "wait_to_assign_minutes",
+      "assigned_at_minutes"
+    ],
+    "features_at_creation": [
+      "quoted_prep_minutes",
+      "haul_km",
+      "created_at_minutes",
+      "free_couriers_now",
+      "inflight_now",
+      "pending_now",
+      "recent_arrivals_30m"
+    ],
+    "models": {
+      "conditional-weibull-assignment": {
+        "bias_minutes": 0.3761230903898232,
+        "coverage_at_p80": 0.8283899834018907,
+        "crps_minutes": 5.947788243182896,
+        "mae_minutes": 8.206199628277517,
+        "model": "conditional-weibull[9f]",
+        "n": 13857,
+        "pit_diagnosis": "over-dispersed (predictive distributions too wide)",
+        "pit_mean": 0.49016005388286743,
+        "pit_variance": 0.07282445372679888,
+        "sd_minutes": 11.671797167514562
+      },
+      "conditional-weibull-creation": {
+        "bias_minutes": -1.0073859133760668,
+        "coverage_at_p80": 0.803564985206033,
+        "crps_minutes": 16.42249384461309,
+        "mae_minutes": 23.55349755169212,
+        "model": "conditional-weibull[7f]",
+        "n": 13857,
+        "pit_diagnosis": "well dispersed",
+        "pit_mean": 0.4767186123453958,
+        "pit_variance": 0.08675791389141643,
+        "sd_minutes": 42.52923927527011
+      },
+      "naive-debiased": {
+        "bias_minutes": -0.27526591633832065,
+        "coverage_at_p80": null,
+        "crps_minutes": 36.60564324175508,
+        "mae_minutes": 36.60564324175508,
+        "model": "naive-debiased (+37.0 min)",
+        "n": 13857,
+        "pit_diagnosis": null,
+        "pit_mean": null,
+        "pit_variance": null,
+        "sd_minutes": 50.58979875131214
+      },
+      "naive-formula": {
+        "bias_minutes": 36.70144394241178,
+        "coverage_at_p80": null,
+        "crps_minutes": 37.17513391619158,
+        "mae_minutes": 37.17513391619158,
+        "model": "naive-formula (quoted prep + travel)",
+        "n": 13857,
+        "pit_diagnosis": null,
+        "pit_mean": null,
+        "pit_variance": null,
+        "sd_minutes": 50.58979875131214
+      },
+      "unconditional-weibull": {
+        "bias_minutes": 3.0597481347202637,
+        "coverage_at_p80": 0.8045753049000505,
+        "crps_minutes": 26.69619370604523,
+        "mae_minutes": 38.256352513093205,
+        "model": "unconditional-weibull",
+        "n": 13857,
+        "pit_diagnosis": "over-dispersed (predictive distributions too wide)",
+        "pit_mean": 0.47174021608570554,
+        "pit_variance": 0.07705799988590498,
+        "sd_minutes": 54.26526928258696
+      }
+    },
+    "score_coefficients": {
+      "created_at_minutes": -0.28930844860288146,
+      "free_couriers_now": -3.1100192606590022,
+      "haul_km": 20.682358566069286,
+      "inflight_now": -1.4786633700762088,
+      "intercept": -0.19119510961396666,
+      "pending_now": 0.4558916193431779,
+      "quoted_prep_minutes": 0.31589653974599835,
+      "recent_arrivals_30m": 0.5625160533026515
+    },
+    "test_days": 60,
+    "train_days": 140
+  },
+  "figures": {
+    "calibration": "/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/ml/reports/calibration.png",
+    "pit_histogram": "/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/ml/reports/pit_histogram.png",
+    "quantile_cost": "/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/ml/reports/quantile_cost.png",
+    "weibull_recovery": "/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/ml/reports/weibull_recovery.png"
+  },
+  "restaurant_identity": {
+    "between_restaurant_share_of_variance": 0.003814893068993779,
+    "note": "MarketplaceSimulator redraws restaurant locations and latent prep bias every run, so restaurant_index is a per-day label, not a stable entity.",
+    "unstable": true,
+    "zones_per_restaurant": 4.0
+  },
+  "runtime_seconds": 30.7,
+  "seed": 20260916,
+  "weibull_recovery": [
+    {
+      "fitted_location": 0.0012322037743154916,
+      "fitted_scale": 29.85319271743572,
+      "fitted_shape": 1.196734442098704,
+      "mle_location": 0.00024741212025050966,
+      "mle_scale": 29.89194766231079,
+      "mle_shape": 1.193989757606769,
+      "n_bins": 35,
+      "r_squared": 0.9999706284685109,
+      "shape_error_pct": -0.2721298251079918,
+      "true_location": 0.0,
+      "true_scale": 30.0,
+      "true_shape": 1.2
+    },
+    {
+      "fitted_location": 7.893627043030576,
+      "fitted_scale": 45.156733534489746,
+      "fitted_shape": 1.807840022445821,
+      "mle_location": 7.938090575367413,
+      "mle_scale": 45.1077851340043,
+      "mle_shape": 1.801755078843918,
+      "n_bins": 29,
+      "r_squared": 0.9999796013024055,
+      "shape_error_pct": 0.4355568025456138,
+      "true_location": 8.0,
+      "true_scale": 45.0,
+      "true_shape": 1.8
+    },
+    {
+      "fitted_location": 14.918792264783063,
+      "fitted_scale": 37.96832453841771,
+      "fitted_shape": 2.4925436116035993,
+      "mle_location": 15.00076893572972,
+      "mle_scale": 37.89896564698276,
+      "mle_shape": 2.4704523325118366,
+      "n_bins": 16,
+      "r_squared": 0.9998834305361929,
+      "shape_error_pct": -0.29825553585602904,
+      "true_location": 15.0,
+      "true_scale": 38.0,
+      "true_shape": 2.5
+    },
+    {
+      "fitted_location": 12.16607048481238,
+      "fitted_scale": 39.83713282111626,
+      "fitted_shape": 3.3432329017941322,
+      "mle_location": 11.79344265424353,
+      "mle_scale": 40.24438039719242,
+      "mle_shape": 3.374053448735282,
+      "n_bins": 13,
+      "r_squared": 0.9999693707949967,
+      "shape_error_pct": -0.7942759111533492,
+      "true_location": 12.0,
+      "true_scale": 40.0,
+      "true_shape": 3.37
+    },
+    {
+      "fitted_location": 20.70722479927238,
+      "fitted_scale": 54.3456077854107,
+      "fitted_shape": 4.118351941446979,
+      "mle_location": 20.571212075226537,
+      "mle_scale": 54.497452246806574,
+      "mle_shape": 4.140602687588572,
+      "n_bins": 16,
+      "r_squared": 0.9999024742494981,
+      "shape_error_pct": -1.944001394119559,
+      "true_location": 20.0,
+      "true_scale": 55.0,
+      "true_shape": 4.2
+    },
+    {
+      "fitted_location": 7.394985609456704,
+      "fitted_scale": 72.59738108332674,
+      "fitted_shape": 6.241078051988184,
+      "mle_location": 7.5677388057449555,
+      "mle_scale": 72.43254990691469,
+      "mle_shape": 6.221577616127488,
+      "n_bins": 15,
+      "r_squared": 0.9999413006364223,
+      "shape_error_pct": 4.017967533136406,
+      "true_location": 10.0,
+      "true_scale": 70.0,
+      "true_shape": 6.0
+    }
+  ]
+}

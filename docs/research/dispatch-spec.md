@@ -348,7 +348,7 @@ public protocol Dispatcher: Sendable {
 **Exclusion is bidirectional and both directions are checked.** `courier.excludedOrderIDs`
 and `order.excludedCourierIDs` are independent sets; either one forbids the pair
 (`Dispatcher.swift:107-108`). Today only the order→courier direction has a database home
-(`orders.excluded_courier_ids uuid[]`, `.context/migrations/11_reassignment_columns.sql:6`);
+(`orders.excluded_courier_ids uuid[]`, `db/migrations/11_reassignment_columns.sql:6`);
 the courier→order direction has no persistence anywhere.
 
 **`Dispatcher` is a protocol, not a sealed hierarchy, and two of the four conformances are
@@ -1368,7 +1368,7 @@ Four defects the RPC must close, all of them structural:
    `hand_to_me` mode without meeting the customer. `fetch_available_orders`
    (`RETURNS SETOF orders`) does **not** fix this.
 3. **Fanout.** `update_courier_heartbeat`
-   (`.context/migrations/13_courier_status_transition_rpcs_v2.sql:136-139`) ends with an
+   (`db/migrations/13_courier_status_transition_rpcs_v2.sql:136-139`) ends with an
    `UPDATE orders SET eta_minutes = …` for the courier's active order. Every such write
    fires the unfiltered channel, so every idle courier runs a full-table scan:
    `O(active × idle / 5)` scans per second.
