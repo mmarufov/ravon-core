@@ -57,7 +57,7 @@ public enum ServiceError: LocalizedError, Sendable {
         case .imageTooLarge:                 return "Изображение слишком большое (макс. 5 МБ)"
         case .unsupportedImageFormat:        return "Неподдерживаемый формат изображения"
         case .categoryNotEmpty:              return "Удалите все блюда из категории перед удалением"
-        case .minOrderNotMet(let need):      return "Минимальная сумма заказа: \(Int(need)) ₽"
+        case .minOrderNotMet(let need):      return "Минимальная сумма заказа: \(Int(need)) сомони"
         case .scheduledTimeInvalid:          return "Выбранное время недоступно"
         case .cartHasIssues(let r):
             let msg = r.reason.localizedMessage

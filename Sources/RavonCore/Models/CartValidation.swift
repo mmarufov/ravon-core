@@ -76,7 +76,7 @@ public enum OrderabilityReason: Codable, Hashable, Sendable {
             if let opensAt { return "Откроется в \(Self.timeFmt.string(from: opensAt))" }
             return "Сейчас закрыто"
         case .overloaded:                        return "Ресторан перегружен заказами"
-        case .minOrderNotMet(let need):          return "Минимальная сумма заказа: \(Int(need)) ₽"
+        case .minOrderNotMet(let need):          return "Минимальная сумма заказа: \(Int(need)) сомони"
         }
     }
 
