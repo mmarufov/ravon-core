@@ -28,3 +28,9 @@ __pycache__/
 
 # Swift build output inside ml/export
 ml/export/.build/
+
+# Ledger test harness — local only
+db/ledger/.venv/
+db/ledger/.hypothesis/
+db/ledger/**/__pycache__/
+db/ledger/.pytest_cache/

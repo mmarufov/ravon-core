@@ -187,7 +187,7 @@ def anomaly_plot(sweeps, gap_history, mde_rows, path: Path | None = None) -> Pat
     _style(ax)
 
     ax = axes[1]
-    for colour, (label, frame) in zip([RAVON_DARK, RAVON_RED], gap_history.items()):
+    for colour, (label, frame) in zip([RAVON_RED, RAVON_DARK], gap_history.items()):
         ax.plot(frame["days_elapsed"], frame["truth_z"], color=colour, marker="o",
                 markersize=3.5, linewidth=2, label=label)
     ax.axhline(3.0, color=GREY, linestyle="--", linewidth=1.3, label="σ = 3 gate")

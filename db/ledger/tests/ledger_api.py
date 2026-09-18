@@ -116,9 +116,15 @@ class Ledger:
             pass
 
     def query(self, sql: str, params: Sequence[Any] = ()) -> list[tuple]:
-        with self.conn.cursor() as cur:
-            cur.execute(sql, params)
-            rows = cur.fetchall()
+        # params or None: passing an empty tuple makes psycopg parse the SQL for
+        # placeholders, which turns a literal LIKE 'ledger_%' into an error.
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(sql, params or None)
+                rows = cur.fetchall()
+        except psycopg.Error as exc:
+            self._abort()
+            raise LedgerError.from_psycopg(exc) from exc
         self._commit()
         return rows
 

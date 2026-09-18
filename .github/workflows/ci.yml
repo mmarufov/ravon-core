@@ -56,16 +56,28 @@ jobs:
         run: swift test --filter 'OrderLifecycle'
 
   dispatch-quality:
-    name: Dispatch quality (simulation)
+    name: Dispatch quality (Kotlin simulation)
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - run: sudo xcode-select -s /Applications/Xcode.app
-      # Runs the marketplace simulator across 30 seeds and asserts batch matching still
-      # beats greedy FCFS. A regression here means dispatch got worse for real couriers,
-      # which no unit test would catch.
-      - name: Dispatch simulation regression
-        run: swift test --filter 'Dispatch|Hungarian'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          # 22+ required: `Libm` uses the FFM API, which was still a preview feature in
+          # 21. Bytecode targets 21; only the runtime needs to be newer.
+          java-version: '25'
+
+      # Runs the ported engine over 30 seeds and asserts it still reproduces the recorded
+      # Swift baseline bit-for-bit, plus the 300-matrix brute-force optimality proof and
+      # the experiment-design findings. A regression here means dispatch got worse for
+      # real couriers, which no unit test would catch.
+      #
+      # macOS specifically, and not incidentally: bit-exactness depends on the platform
+      # libm (see services/dispatch/.../Libm.kt). The fixture was recorded on macOS, so
+      # the comparison has to run there. On a Linux runner it would need re-recording.
+      - name: Kotlin dispatch suite
+        working-directory: services
+        run: ./gradlew :dispatch:test --no-daemon
 
   schema-drift:
     name: Schema drift (Swift ↔ SQL)
@@ -78,6 +90,65 @@ jobs:
       # reported without failing, so the gate stays trustworthy.
       - name: Schema drift check
         run: python3 scripts/schema_drift.py
+
+  ledger-invariants:
+    name: Ledger invariants (PostgreSQL 16)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ledger
+        ports:
+          - 5433:5432
+        # Without this the job races the container: psql would connect before
+        # initdb has finished and the schema would apply to nothing.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: db/ledger/tests/requirements.txt
+
+      - name: Install test dependencies
+        run: python -m pip install -r db/ledger/tests/requirements.txt
+
+      # Applying the schema as its own step, before pytest, so that a syntax
+      # error in schema.sql fails with the SQL error rather than with 40
+      # confusing fixture failures. ON_ERROR_STOP matters: without it psql exits
+      # 0 after a failed statement.
+      - name: Apply schema.sql to a fresh database
+        env:
+          PGPASSWORD: ledger
+        run: |
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5433 -U postgres -d postgres \
+            -c 'CREATE DATABASE ledger_schema_smoke'
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5433 -U postgres \
+            -d ledger_schema_smoke -f db/ledger/schema.sql
+
+      # Debits equal credits, entries are immutable, balances cannot go
+      # negative, postings are idempotent — and none of it survives a crash
+      # half-applied. These are database properties, so they are tested against
+      # a database, with backends killed mid-transaction by pg_terminate_backend.
+      #
+      # LEDGER_MAX_EXAMPLES is the runtime dial for the Hypothesis state machine:
+      # 100 examples x 40 steps keeps this job well under a minute on a GitHub
+      # runner. Raising it explores more interleavings at a linear cost in
+      # wall-clock; see db/ledger/README.md.
+      - name: Ledger invariants and crash injection
+        working-directory: db/ledger
+        env:
+          LEDGER_DSN: postgresql://postgres:ledger@127.0.0.1:5433/postgres
+          LEDGER_MAX_EXAMPLES: "100"
+          HYPOTHESIS_PROFILE: ci
+        run: python -m pytest tests -p no:cacheprovider
 
   secret-scan:
     name: Secret scan

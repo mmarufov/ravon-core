@@ -437,10 +437,26 @@ def cluster_anomalies(
 ) -> list[AnomalyCluster]:
     """Collapse overlapping anomalous segments into one incident each.
 
-    Distance is Jaccard on the *sets of orders each segment selects on the test day*,
-    not on the segment labels — two labels that happen to pick the same orders are the
-    same finding regardless of how they are spelled. Agglomerative average linkage,
-    cut at `overlap_threshold`.
+    Similarity is the **overlap coefficient** — `|A and B| / min(|A|, |B|)` — computed
+    on the sets of orders each segment selects on the test day, not on the segment
+    labels. Two labels that happen to pick the same orders are the same finding
+    regardless of how they are spelled.
+
+    Overlap rather than Jaccard, and the difference matters here. Segments form a
+    hierarchy: `clock_hour=12|zone=z0-1` is a strict subset of `zone=z0-1`. Their
+    Jaccard is about a third — low enough to look unrelated — but they are obviously
+    the same incident, and paging twice for it is the failure mode clustering exists
+    to prevent. The overlap coefficient is 1.0 for any subset relationship, so a child
+    segment always merges into its firing parent.
+
+    Agglomerative **single** linkage, cut at `overlap_threshold`. Single linkage is
+    the deliberate choice: containment chains, so the thing being recovered is the
+    connected component of the "one of these contains most of the other" graph, and
+    single linkage computes exactly that. Average linkage does not — on the worked
+    example in the tests it leaves a broken zone split across five clusters, because
+    two sibling restaurants inside the same failing zone have no overlap with each
+    other and their average distance to the parent exceeds the cut. Five pages, one
+    incident, which is the outcome clustering was added to prevent.
 
     The representative of a cluster is its highest-scoring member, and since the score
     divides by `level ** 1.2`, that is biased towards the simplest description.
@@ -468,11 +484,11 @@ def cluster_anomalies(
     for i in range(n):
         for j in range(i + 1, n):
             a, b = masks[segments[i]], masks[segments[j]]
-            union = np.logical_or(a, b).sum()
-            jaccard = (np.logical_and(a, b).sum() / union) if union else 0.0
-            distance[i, j] = distance[j, i] = 1.0 - jaccard
+            smaller = min(a.sum(), b.sum())
+            overlap = (np.logical_and(a, b).sum() / smaller) if smaller else 0.0
+            distance[i, j] = distance[j, i] = 1.0 - overlap
 
-    linkage = hierarchy.linkage(squareform(distance, checks=False), method="average")
+    linkage = hierarchy.linkage(squareform(distance, checks=False), method="single")
     labels = hierarchy.fcluster(linkage, t=overlap_threshold, criterion="distance")
 
     clusters = []

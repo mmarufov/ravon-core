@@ -136,11 +136,12 @@ def run(quick: bool = False) -> dict:
     report["anomaly"] = _anomaly_section(df, quick=quick)
 
     report["figures"] = _figures(train, test, report, transform_example)
-    report["runtime_seconds"] = round(time.time() - started, 1)
 
+    # Runtime is printed, not written: the committed artefact has to be byte-identical
+    # across runs, and a timing is the one thing in here that cannot be.
     out = REPORTS_DIR / "metrics.json"
     out.write_text(json.dumps(report, indent=2, sort_keys=True, default=_json_default))
-    print(f"wrote {out}")
+    print(f"wrote {out} in {time.time() - started:.1f}s")
     return report
 
 
@@ -152,6 +153,11 @@ def _json_default(value):
     if isinstance(value, (np.bool_,)):
         return bool(value)
     raise TypeError(f"not JSON serialisable: {type(value)}")
+
+
+def _relative(path: Path) -> str:
+    """Paths in the committed report must not name anyone's home directory."""
+    return str(path.relative_to(REPORTS_DIR.parent))
 
 
 def _split(df: pd.DataFrame):
@@ -445,12 +451,12 @@ def _figures(train, test, report: dict, transform_example) -> dict:
     ]
 
     figures = {
-        "pit_histogram": str(plots.pit_histogram(distributions, y)),
-        "calibration": str(plots.calibration_plot(distributions, y)),
-        "weibull_recovery": str(
+        "pit_histogram": _relative(plots.pit_histogram(distributions, y)),
+        "calibration": _relative(plots.calibration_plot(distributions, y)),
+        "weibull_recovery": _relative(
             plots.recovery_plot(report["weibull_recovery"], transform_example)
         ),
-        "quantile_cost": str(
+        "quantile_cost": _relative(
             plots.quantile_cost_plot(
                 [
                     {"ratio": s["ratio"], "derived": s["derived"],
@@ -471,7 +477,7 @@ def _figures(train, test, report: dict, transform_example) -> dict:
             }
             for block in anomaly["injection_slow_restaurant"]
         ]
-        figures["anomaly_detection"] = str(
+        figures["anomaly_detection"] = _relative(
             plots.anomaly_plot(sweeps, anomaly["gap_window"]["_frames"],
                                anomaly["minimum_detectable_effect"])
         )

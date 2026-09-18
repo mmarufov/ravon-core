@@ -41,9 +41,9 @@
     ],
     "false_positive_rate": [
       {
-        "clustered_incidents": 35,
+        "clustered_incidents": 34,
         "days_evaluated": 172,
-        "incidents_per_day": 0.20348837209302326,
+        "incidents_per_day": 0.19767441860465115,
         "metric": "mean_delivery_minutes",
         "per_test_false_positive_rate": 0.0027460293899361733,
         "segment_firings": 37,
@@ -52,9 +52,9 @@
         "tests_run": 13474
       },
       {
-        "clustered_incidents": 58,
+        "clustered_incidents": 39,
         "days_evaluated": 172,
-        "incidents_per_day": 0.3372093023255814,
+        "incidents_per_day": 0.22674418604651161,
         "metric": "unassigned_rate",
         "per_test_false_positive_rate": 0.00445302063232893,
         "segment_firings": 60,
@@ -1268,7 +1268,9 @@
         "mae_minutes": 8.206199628277517,
         "model": "conditional-weibull[9f]",
         "n": 13857,
+        "pit_chi2_p": 1.6428759417504607e-246,
         "pit_diagnosis": "over-dispersed (predictive distributions too wide)",
+        "pit_ks": 0.05963225350163304,
         "pit_mean": 0.49016005388286743,
         "pit_variance": 0.07282445372679888,
         "sd_minutes": 11.671797167514562
@@ -1280,7 +1282,9 @@
         "mae_minutes": 23.55349755169212,
         "model": "conditional-weibull[7f]",
         "n": 13857,
+        "pit_chi2_p": 2.4741082783835317e-214,
         "pit_diagnosis": "well dispersed",
+        "pit_ks": 0.06979190650038392,
         "pit_mean": 0.4767186123453958,
         "pit_variance": 0.08675791389141643,
         "sd_minutes": 42.52923927527011
@@ -1292,7 +1296,9 @@
         "mae_minutes": 36.60564324175508,
         "model": "naive-debiased (+37.0 min)",
         "n": 13857,
+        "pit_chi2_p": null,
         "pit_diagnosis": null,
+        "pit_ks": null,
         "pit_mean": null,
         "pit_variance": null,
         "sd_minutes": 50.58979875131214
@@ -1304,7 +1310,9 @@
         "mae_minutes": 37.17513391619158,
         "model": "naive-formula (quoted prep + travel)",
         "n": 13857,
+        "pit_chi2_p": null,
         "pit_diagnosis": null,
+        "pit_ks": null,
         "pit_mean": null,
         "pit_variance": null,
         "sd_minutes": 50.58979875131214
@@ -1316,7 +1324,9 @@
         "mae_minutes": 38.256352513093205,
         "model": "unconditional-weibull",
         "n": 13857,
+        "pit_chi2_p": 0.0,
         "pit_diagnosis": "over-dispersed (predictive distributions too wide)",
+        "pit_ks": 0.15216803764673237,
         "pit_mean": 0.47174021608570554,
         "pit_variance": 0.07705799988590498,
         "sd_minutes": 54.26526928258696
@@ -1336,11 +1346,11 @@
     "train_days": 140
   },
   "figures": {
-    "anomaly_detection": "/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/ml/reports/anomaly_detection.png",
-    "calibration": "/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/ml/reports/calibration.png",
-    "pit_histogram": "/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/ml/reports/pit_histogram.png",
-    "quantile_cost": "/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/ml/reports/quantile_cost.png",
-    "weibull_recovery": "/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/ml/reports/weibull_recovery.png"
+    "anomaly_detection": "reports/anomaly_detection.png",
+    "calibration": "reports/calibration.png",
+    "pit_histogram": "reports/pit_histogram.png",
+    "quantile_cost": "reports/quantile_cost.png",
+    "weibull_recovery": "reports/weibull_recovery.png"
   },
   "restaurant_identity": {
     "between_restaurant_share_of_variance": 0.003814893068993779,
@@ -1348,7 +1358,6 @@
     "unstable": true,
     "zones_per_restaurant": 4.0
   },
-  "runtime_seconds": 40.7,
   "seed": 20260916,
   "weibull_recovery": [
     {
