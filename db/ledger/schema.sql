@@ -1021,9 +1021,23 @@ REVOKE INSERT, UPDATE, DELETE, TRUNCATE
   ON ledger_entries, ledger_transactions, ledger_balances, ledger_accounts, ledger_payouts
   FROM ravon_ledger_app;
 
+-- Every SECURITY DEFINER function, without exception. The four trigger
+-- functions are on this list because marking them SECURITY DEFINER (so the
+-- invariant runs with the owner's privileges at COMMIT) also handed PUBLIC an
+-- EXECUTE grant on them, which is the same shape of finding as the
+-- anon-callable RPCs in .gstack/security-reports. PostgreSQL refuses to call a
+-- trigger function directly, so the practical blast radius there was nil — but
+-- ledger_verify_balances() and ledger_deferred_check_count() are ordinary
+-- functions and would have leaked every account id and balance to any role.
+-- test_no_ledger_function_is_executable_by_public keeps this list honest.
 REVOKE EXECUTE ON FUNCTION
   ledger_post(text, text, text, uuid, jsonb),
   ledger_open_account(ledger_account_kind, uuid, char, boolean),
+  ledger_assert_transaction_balanced(),
+  ledger_assert_transaction_has_entries(),
+  ledger_apply_balance_delta(),
+  ledger_reject_mutation(),
+  ledger_deferred_check_count(),
   ledger_payout_begin(text, uuid, uuid, bigint, char),
   ledger_payout_mark_submitted(uuid, text),
   ledger_payout_post(uuid),

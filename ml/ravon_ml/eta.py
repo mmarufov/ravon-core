@@ -38,13 +38,12 @@ import pandas as pd
 
 from .data import assert_no_latent_features
 from .metrics import (
-    coverage_curve,
     crps_ensemble,
     crps_weibull,
     pit_values,
     summarise_pit,
 )
-from .weibull import WeibullParams, fit_interval_regression
+from .weibull import WeibullParams, fit_interval_regression, fit_mle
 
 __all__ = [
     "ConditionalWeibullETA",
@@ -73,6 +72,11 @@ class ConditionalWeibullETA:
     bin_width: float = 6.0
     #: Below this, a cell is dropped from the link regression rather than fitted badly.
     min_cell_samples: int = 200
+    #: `"interval"` (DoorDash's log-log survival OLS) or `"mle"`. Switchable so the
+    #: claim that interval regression generalises better can be *measured* on this
+    #: data rather than inherited from their blog post. It does not, here; see
+    #: FINDINGS.md.
+    per_cell_fit: str = "interval"
 
     coefficients_: np.ndarray | None = field(default=None, init=False)
     cell_table_: pd.DataFrame | None = field(default=None, init=False)
@@ -117,16 +121,22 @@ class ConditionalWeibullETA:
             mask = cells == cell
             if mask.sum() < self.min_cell_samples:
                 continue
-            fit = fit_interval_regression(y[mask], bin_width=self.bin_width)
+            if self.per_cell_fit == "interval":
+                fit = fit_interval_regression(y[mask], bin_width=self.bin_width)
+                params, r_squared = fit.params, fit.r_squared
+            elif self.per_cell_fit == "mle":
+                params, r_squared = fit_mle(y[mask]), float("nan")
+            else:
+                raise ValueError(f"unknown per_cell_fit {self.per_cell_fit!r}")
             rows.append(
                 {
                     "cell": int(cell),
                     "n": int(mask.sum()),
                     "score": float(score[mask].mean()),
-                    "shape": fit.shape,
-                    "scale": fit.scale,
-                    "location": fit.location,
-                    "r_squared": fit.r_squared,
+                    "shape": params.shape,
+                    "scale": params.scale,
+                    "location": params.location,
+                    "r_squared": r_squared,
                     "mean_actual": float(y[mask].mean()),
                 }
             )
@@ -174,7 +184,8 @@ class ConditionalWeibullETA:
 
     @property
     def name(self) -> str:
-        return f"conditional-weibull[{len(self.features)}f]"
+        suffix = "" if self.per_cell_fit == "interval" else f"/{self.per_cell_fit}"
+        return f"conditional-weibull[{len(self.features)}f{suffix}]"
 
 
 @dataclass
@@ -240,6 +251,12 @@ class EvaluationRow:
     pit_diagnosis: str | None
     pit_variance: float | None
     pit_mean: float | None
+    #: Kolmogorov-Smirnov statistic of the PIT values against Uniform(0, 1), and the
+    #: chi-square p-value of the 20-bin histogram. Reported because the variance-based
+    #: `pit_diagnosis` only sees dispersion: a histogram can have textbook variance and
+    #: still be visibly tilted or spiked, and these two numbers catch that.
+    pit_ks: float | None
+    pit_chi2_p: float | None
     coverage_at_p80: float | None
 
     def as_dict(self) -> dict:
@@ -253,6 +270,8 @@ class EvaluationRow:
             "pit_diagnosis": self.pit_diagnosis,
             "pit_variance": self.pit_variance,
             "pit_mean": self.pit_mean,
+            "pit_ks": self.pit_ks,
+            "pit_chi2_p": self.pit_chi2_p,
             "coverage_at_p80": self.coverage_at_p80,
         }
 
@@ -281,6 +300,8 @@ def evaluate(model, test: pd.DataFrame) -> EvaluationRow:
             pit_diagnosis=None,
             pit_variance=None,
             pit_mean=None,
+            pit_ks=None,
+            pit_chi2_p=None,
             coverage_at_p80=None,
         )
 
@@ -301,6 +322,8 @@ def evaluate(model, test: pd.DataFrame) -> EvaluationRow:
         pit_diagnosis=pit.diagnosis,
         pit_variance=pit.variance,
         pit_mean=pit.mean,
+        pit_ks=pit.ks_statistic,
+        pit_chi2_p=pit.chi2_p_value,
         coverage_at_p80=float((y <= p80).mean()),
     )
 

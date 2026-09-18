@@ -57,6 +57,11 @@ def test_the_check_is_deferred_to_commit_not_run_at_insert(ledger: Ledger):
     Inside the transaction, a half-posted (therefore unbalanced) set of entries
     is perfectly visible. Only COMMIT rejects it. If someone "fixed" the trigger
     by making it immediate, this test fails — and so would every legal posting.
+
+    Two legs rather than one, deliberately: a single-leg transaction trips the
+    separate "at least two entries" deferred check first, because PostgreSQL
+    fires deferred events in the order they were queued and the transaction row
+    was inserted before the entry. See FINDINGS.md.
     """
     chart = open_chart(ledger)
     escrow = escrow_for(ledger, uuid4())
@@ -77,6 +82,11 @@ def test_the_check_is_deferred_to_commit_not_run_at_insert(ledger: Ledger):
         # One leg in, unbalanced, and the database is perfectly happy about it.
         cur.execute("SELECT count(*) FROM ledger_entries WHERE transaction_id = %s", (tx_id,))
         assert cur.fetchone()[0] == 1
+
+        cur.execute(
+            "INSERT INTO ledger_entries (transaction_id, account_id, direction, amount_minor, currency) "
+            "VALUES (%s, %s, 'credit', 4999, %s)",
+            (tx_id, escrow, CURRENCY))
 
     fires_before = _deferred_fires(conn)
 
@@ -252,10 +262,13 @@ def test_refund_of_exactly_the_balance_is_allowed(ledger: Ledger):
 def test_allow_negative_accounts_may_go_negative(ledger: Ledger):
     """The flag is not decoration: a clearing account really does go negative."""
     chart = open_chart(ledger)
-    escrow = escrow_for(ledger, uuid4())
-    _post(ledger, [debit(escrow, 100, CURRENCY), credit(chart.clearing, 100, CURRENCY)])
+    # promo_expense is debit-normal, so debiting it is legal from zero; clearing
+    # is the account under test and it is allowed to go below zero.
+    _post(ledger, [debit(chart.promo_expense, 100, CURRENCY),
+                   credit(chart.clearing, 100, CURRENCY)])
 
     assert ledger.natural_balance(chart.clearing) == -100
+    assert ledger.natural_balance(chart.promo_expense) == 100
 
 
 def test_a_posting_that_dips_and_recovers_within_itself_is_allowed(ledger: Ledger):

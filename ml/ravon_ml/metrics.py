@@ -72,8 +72,15 @@ def crps_weibull(params: WeibullParams | list[WeibullParams], y) -> np.ndarray:
     m = lam * special.gamma(1.0 + 1.0 / k)
     pow_term = np.power(2.0, -1.0 / k)
 
-    safe_z = np.maximum(z, 0.0)
-    lower_gamma = special.gammainc(1.0 / k, np.power(safe_z / lam, k))
+    # `(z / lam) ** k` overflows for a sharp distribution far from its location — a
+    # near-degenerate point forecast is exactly that case. Compute the power in logs
+    # and cap the exponent: `gammainc` has already saturated at 1 long before e**700,
+    # so clipping changes no answer and removes the overflow.
+    ratio = np.maximum(z, 0.0) / lam
+    with np.errstate(divide="ignore"):
+        log_ratio = np.log(np.where(ratio > 0.0, ratio, 1.0))
+    powered = np.where(ratio > 0.0, np.exp(np.minimum(k * log_ratio, 700.0)), 0.0)
+    lower_gamma = special.gammainc(1.0 / k, powered)
 
     positive = z + m * (pow_term - 2.0 * lower_gamma)
     negative = m * pow_term - z

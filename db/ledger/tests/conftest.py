@@ -41,12 +41,18 @@ LEDGER_TABLES = (
 # ---------------------------------------------------------------------------
 # Hypothesis profiles
 #
-# The repo's Swift property tests are SplitMix64-seeded so a failure reproduces
-# from a printed seed. The equivalent here is `derandomize`: Hypothesis derives
-# its randomness from the test itself, so a given commit explores the same
-# sequences on every machine and a CI failure reproduces locally with no seed to
-# copy. Setting LEDGER_SEED switches to that seed instead, for widening the
-# search around a known-bad area.
+# The repo's Swift property tests are SplitMix64-seeded so that a failure
+# reproduces from a printed seed. The equivalent here is `derandomize`:
+# Hypothesis derives its randomness from the test itself, so a given commit
+# explores the same sequences on every machine and a CI failure reproduces
+# locally with nothing to copy across. A failing run additionally prints a
+# @reproduce_failure blob that replays the exact failing case.
+#
+# There is deliberately no seed environment variable. Hypothesis does not expose
+# a seed argument on run_state_machine_as_test, so a LEDGER_SEED knob could only
+# have turned `derandomize` off — which makes runs *less* reproducible, not more,
+# while appearing to do the opposite. LEDGER_MAX_EXAMPLES and LEDGER_STEP_COUNT
+# are the real dials for exploring further.
 #
 # max_examples is the CI runtime dial. Each example runs `stateful_step_count`
 # database round trips plus one invariant query per step, so wall-clock is
@@ -54,10 +60,8 @@ LEDGER_TABLES = (
 # ledger-invariants job under ~60s on a GitHub runner; raise LEDGER_MAX_EXAMPLES
 # locally when hunting.
 # ---------------------------------------------------------------------------
-_MAX_EXAMPLES = int(os.environ.get("LEDGER_MAX_EXAMPLES", "25"))
-_STEP_COUNT = int(os.environ.get("LEDGER_STEP_COUNT", "30"))
-_SEED = os.environ.get("LEDGER_SEED")
-
+_MAX_EXAMPLES = int(os.environ.get("LEDGER_MAX_EXAMPLES", "120"))
+_STEP_COUNT = int(os.environ.get("LEDGER_STEP_COUNT", "40"))
 _COMMON = dict(
     max_examples=_MAX_EXAMPLES,
     stateful_step_count=_STEP_COUNT,
@@ -65,12 +69,12 @@ _COMMON = dict(
     suppress_health_check=[HealthCheck.too_slow, HealthCheck.data_too_large],
 )
 
-settings.register_profile("ci", derandomize=_SEED is None, **_COMMON)
+settings.register_profile("ci", derandomize=True, **_COMMON)
 settings.register_profile("dev", derandomize=False, **_COMMON)
 settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "ci"))
 
+MAX_EXAMPLES = _MAX_EXAMPLES
 STEP_COUNT = _STEP_COUNT
-SEED = int(_SEED) if _SEED else None
 
 
 def _dsn_for(dsn: str, dbname: str, user: str | None = None,
