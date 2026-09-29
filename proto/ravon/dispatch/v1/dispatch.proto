@@ -1,0 +1,148 @@
+syntax = "proto3";
+
+package ravon.dispatch.v1;
+
+import "google/protobuf/timestamp.proto";
+import "ravon/common/v1/money.proto";
+
+option java_package = "dev.ravon.proto.dispatch.v1";
+option java_multiple_files = true;
+
+// A point on the earth. Dushanbe sits near 38.56°N, 68.79°E.
+message GeoPoint {
+  double latitude = 1;
+  double longitude = 2;
+}
+
+// A courier available for assignment.
+message CourierState {
+  string courier_id = 1;
+  GeoPoint location = 2;
+
+  // When this courier last finished a delivery, or came online. Drives the fairness
+  // term: a courier idle for 40 minutes should win ties against one idle for 2.
+  google.protobuf.Timestamp idle_since = 3;
+
+  // Orders this courier has declined or been excluded from.
+  //
+  // Note this side of the exclusion has no storage today — the database has only
+  // `orders.excluded_courier_ids`. Carried here because the cost model is two-sided, and
+  // because the decline feature (which currently loops forever, since nothing records a
+  // decline) will need it.
+  repeated string excluded_order_ids = 4;
+}
+
+// An order waiting for a courier.
+message PendingOrder {
+  string order_id = 1;
+  GeoPoint pickup = 2;
+  GeoPoint dropoff = 3;
+
+  // When the kitchen expects the food to be ready. A courier arriving earlier waits, and
+  // that wait is priced.
+  google.protobuf.Timestamp ready_at = 4;
+  google.protobuf.Timestamp created_at = 5;
+
+  repeated string excluded_courier_ids = 6;
+}
+
+// Cost-model parameters. All costs are in minutes.
+//
+// Omit the message to accept the defaults, which are the values the recorded dispatch
+// baseline was measured at. Overriding any of them invalidates that comparison, so this
+// exists for experimentation rather than for tuning in production.
+message DispatchPolicy {
+  double average_speed_kmh = 1;          // default 18 — a scooter in Dushanbe traffic
+  double max_assignment_radius_km = 2;   // default 8
+  double order_age_credit_per_minute = 3;    // default 1.5
+  double courier_idle_credit_per_minute = 4; // default 0.4
+  double max_credit_minutes = 5;         // default 25, capped per credit
+}
+
+message AssignRequest {
+  repeated CourierState couriers = 1;
+  repeated PendingOrder orders = 2;
+
+  // Explicit rather than the server clock.
+  //
+  // The cost model is a pure function of (couriers, orders, now), so making the clock a
+  // request field keeps any given request reproducible and testable — you can replay a
+  // production assignment exactly. A server-read clock would make that impossible.
+  google.protobuf.Timestamp now = 3;
+
+  DispatchPolicy policy = 4;
+}
+
+message Assignment {
+  string courier_id = 1;
+  string order_id = 2;
+
+  // What the cost model scored this pair at, in minutes. Can be negative once the
+  // urgency and fairness credits apply — that is load-bearing, not a bug: it is what
+  // lets a stale order outrank a cheap new one.
+  double cost_minutes = 3;
+}
+
+message AssignResponse {
+  repeated Assignment assignments = 1;
+}
+
+// What a courier is shown when an order is offered to them.
+//
+// **This message exists to be narrower than the order row, and that is its whole point.**
+// The feed it replaces does `select("*")` on `orders`, which returns
+// `verification_code` and `delivery_verification_code` to every authenticated courier for
+// every unassigned order — so a courier can read the customer's hand-off code off the
+// feed and complete a `hand_to_me` delivery without ever meeting them. Switching to the
+// old `fetch_available_orders` RPC would not have fixed it either: that returns
+// `SETOF orders`, i.e. whole rows.
+//
+// So: no verification codes, ever. And no street address until the courier has actually
+// claimed the order — before that they get an area label and a distance, which is all the
+// accept/decline decision needs.
+message OrderOffer {
+  string order_id = 1;
+  string restaurant_name = 2;
+  GeoPoint restaurant_location = 3;
+
+  // Coarse destination — a district or area name, not a street address.
+  string dropoff_area = 4;
+
+  double haul_km = 5;
+  ravon.common.v1.Money estimated_earnings = 6;
+
+  // Offers are per-courier and time-boxed, so a declined or ignored offer can move on to
+  // the next-best courier instead of sitting in a shared pool forever.
+  google.protobuf.Timestamp expires_at = 7;
+}
+
+message GetOfferRequest {
+  string courier_id = 1;
+  GeoPoint location = 2;
+}
+
+message GetOfferResponse {
+  // Absent when nothing is currently offerable to this courier.
+  OrderOffer offer = 1;
+}
+
+// Batch dispatch.
+//
+// Unary only. Streaming is deliberately out of scope: Supabase Realtime already carries
+// order-status, chat, courier-location and menu subscriptions, and keeping the transport
+// unary is what lets the iOS client use Connect-Swift's `.grpcWeb` over the stock
+// `URLSession` rather than bundling a NIO HTTP/2 stack.
+service DispatchService {
+  // Solve a whole batch as a minimum-cost bipartite matching.
+  //
+  // Pure computation: no database reads, no writes, no auth. That is why this is the
+  // first service extracted — there is no RLS interaction to get wrong, and the result
+  // is verifiable against a fixture recorded from the Swift original.
+  rpc Assign(AssignRequest) returns (AssignResponse);
+
+  // The per-courier offer projection that replaces the shared "oldest order in the
+  // country" feed. Not implemented in Phase 1 — it needs order state, which arrives with
+  // the order module — but declared here so the contract is reviewable now and the
+  // compatibility gate starts guarding it immediately.
+  rpc GetOffer(GetOfferRequest) returns (GetOfferResponse);
+}

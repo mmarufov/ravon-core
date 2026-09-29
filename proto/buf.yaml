@@ -1,0 +1,14 @@
+version: v2
+modules:
+  - path: .
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - FILE
+  # FILE is the strictest useful category: it rejects anything that breaks a client
+  # compiled against the old schema, including moving a message between files. That is
+  # the right setting here because the clients are *shipped iOS apps* with no
+  # forced-upgrade mechanism — a v2 would have to be served alongside v1 forever, so the
+  # gate's job is to make sure that day never arrives by accident.

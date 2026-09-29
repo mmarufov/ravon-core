@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package ravon.common.v1;
+
+option java_package = "dev.ravon.proto.common.v1";
+option java_multiple_files = true;
+
+// An amount of money, in the smallest indivisible unit of its currency.
+//
+// Not a double, and not `google.type.Money`. The reason is specific rather than
+// stylistic: the fleet's current `Double` path *silently destroys stored money*. The
+// merchant app seeds its price editor with `String(Int(item.price))` and posts the field
+// back unconditionally, so an item stored at 99.50 becomes 99.00 the moment a merchant
+// opens the sheet to toggle availability and saves — and because every money input is a
+// `.numberPad` with no decimal separator, they cannot type the 50 diram back.
+//
+// `google.type.Money` loses for the same class of reason: its units/nanos split invites
+// exactly the rounding divergence the fleet already has three versions of.
+message Money {
+  // Tajikistani diram. 100 diram = 1 somoni.
+  int64 minor = 1;
+
+  // ISO 4217. Always "TJS" today; carried explicitly so a second currency is an additive
+  // change rather than a reinterpretation of every existing row.
+  string currency_code = 2;
+}
