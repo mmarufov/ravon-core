@@ -79,6 +79,46 @@ jobs:
         working-directory: services
         run: ./gradlew :dispatch:test --no-daemon
 
+      # End-to-end over a real Armeria server: gRPC *and* gRPC-Web, asserting the wire
+      # returns exactly what the in-process engine computes. gRPC-Web specifically
+      # because that is what Connect-Swift uses from iOS — and because narrowing
+      # Armeria's default serialization formats already silently dropped it once.
+      - name: Kotlin server suite
+        working-directory: services
+        run: ./gradlew :server:test --no-daemon
+
+  proto-contract:
+    name: Proto contract (lint + breaking)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # `buf breaking` needs the base ref, not just the tip
+
+      - uses: bufbuild/buf-action@v1
+        with:
+          setup_only: true
+
+      - name: Lint
+        run: buf lint proto
+
+      # The contract gate. An incompatible schema change must fail the build, not
+      # production — there is no forced-upgrade mechanism for a shipped iOS app, so the
+      # day a v2 exists v1 has to be served alongside it forever. This job's job is to
+      # make sure that day never arrives by accident.
+      #
+      # `FILE` is the strictest useful category: it rejects field renumbering, deleting
+      # or retyping a field, renaming an enum value, removing an RPC, and moving a
+      # message between files. Adding fields, RPCs and enum values stays allowed.
+      - name: Breaking-change check against main
+        run: |
+          if git cat-file -e "origin/main:proto" 2>/dev/null; then
+            buf breaking proto --against '.git#branch=origin/main,subdir=proto'
+          else
+            echo "::notice::No proto/ on main yet — this PR establishes the baseline."
+            echo "Subsequent PRs will be checked against it."
+          fi
+
   schema-drift:
     name: Schema drift (Swift ↔ SQL)
     runs-on: ubuntu-latest

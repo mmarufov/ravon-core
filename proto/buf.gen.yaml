@@ -1,0 +1,10 @@
+version: v2
+managed:
+  enabled: true
+plugins:
+  # Kotlin server stubs. Generated into the Gradle module rather than committed, because
+  # the JVM build always has the toolchain available.
+  - remote: buf.build/protocolbuffers/java
+    out: ../services/proto/build/generated/buf/java
+  - remote: buf.build/grpc/kotlin
+    out: ../services/proto/build/generated/buf/kotlin

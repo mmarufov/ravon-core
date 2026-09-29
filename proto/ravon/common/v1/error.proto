@@ -1,0 +1,106 @@
+syntax = "proto3";
+
+package ravon.common.v1;
+
+import "ravon/common/v1/money.proto";
+
+option java_package = "dev.ravon.proto.common.v1";
+option java_multiple_files = true;
+
+// Every way a Ravon RPC can refuse.
+//
+// Sourced from the 29 distinct `reason` strings the SQL layer raises via
+// `RAISE EXCEPTION ... USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('reason', ...)`,
+// enumerated across `db/migrations/*.sql`.
+//
+// Three deliberate departures from that set, each closing a real defect:
+//
+//  1. `CANCEL_AFTER_PICKUP_NOT_ALLOWED` and `CANNOT_CANCEL_POST_PICKUP` were two spellings
+//     of one condition. Collapsed into REASON_CANNOT_CANCEL_POST_PICKUP.
+//  2. `RESTAURANT_CLOSED` was raised for three distinct causes, one of which is
+//     "the restaurant row does not exist" (`04_create_order_v3…:153`, where
+//     `IF NOT FOUND OR status = 'closed'` conflates them). Split out as
+//     REASON_RESTAURANT_NOT_FOUND so the client can tell a bad id from a closed shop.
+//  3. Added REASON_INVALID_TIP_AMOUNT, REASON_TIP_WINDOW_CLOSED and
+//     REASON_INSUFFICIENT_STOCK, which the SQL raises or the tip design requires but the
+//     Swift decoder never covered.
+//
+// The old decoder matched `"reason"\s*:\s*"([A-Z_]+)"` with a regex and discarded every
+// sibling key, so it could carry a kind but never a value — which is why the consumer's
+// reasonable ask ("tell me the tip cap so I can show it") was unimplementable. Structured
+// detail below is the fix.
+enum Reason {
+  REASON_UNSPECIFIED = 0;
+
+  // Authorization — PERMISSION_DENIED.
+  REASON_UNAUTHORIZED = 1;
+  REASON_ROLE_CHANGE_FORBIDDEN = 2;
+  REASON_COURIER_EXCLUDED_FROM_ORDER = 3;
+
+  // Authentication — UNAUTHENTICATED.
+  REASON_NOT_AUTHENTICATED = 10;
+
+  // Lookup — NOT_FOUND.
+  REASON_ORDER_NOT_FOUND = 20;
+  REASON_RESTAURANT_NOT_FOUND = 21;
+
+  // State-machine refusal — FAILED_PRECONDITION.
+  REASON_INVALID_STATUS_TRANSITION = 30;
+  REASON_ORDER_ALREADY_TERMINAL = 31;
+  REASON_ORDER_NO_LONGER_PICKUPABLE = 32;
+  REASON_CANNOT_CANCEL_POST_PICKUP = 33;
+  REASON_RESTAURANT_CLOSED = 34;
+  REASON_RESTAURANT_PAUSED = 35;
+  REASON_RESTAURANT_NOT_ACCEPTING = 36;
+  REASON_OUT_OF_HOURS = 37;
+  REASON_OVERLOADED = 38;
+  REASON_COURIER_MUST_BE_ONLINE = 39;
+  REASON_COURIER_SUSPENDED = 40;
+  REASON_COURIER_ALREADY_HAS_ACTIVE_ORDER = 41;
+  REASON_COURIER_CANCEL_COOLDOWN = 42;
+  REASON_ITEM_UNAVAILABLE = 43;
+  REASON_INSUFFICIENT_STOCK = 44;
+  REASON_MIN_ORDER_NOT_MET = 45;
+  REASON_MISSING_PROOF_IMAGE = 46;
+  REASON_TIP_WINDOW_CLOSED = 47;
+
+  // Bad input — INVALID_ARGUMENT.
+  REASON_INVALID_REASON_CODE = 60;
+  REASON_INVALID_EXTRA_MINUTES = 61;
+  REASON_INVALID_VERIFICATION_CODE = 62;
+  REASON_WRONG_DELIVERY_CODE = 63;
+  REASON_SCHEDULED_TIME_INVALID = 64;
+  REASON_ACCURACY_TOO_LOW = 65;
+  REASON_INVALID_TIP_AMOUNT = 66;
+}
+
+// Carried in `google.rpc.Status.details` so a refusal arrives with its context intact.
+//
+// This is the part the old regex decoder could not express. `MIN_ORDER_NOT_MET` without
+// `need` is a dead end for the UI; with it, the client can say how much more to add.
+message ErrorDetail {
+  Reason reason = 1;
+
+  // The order-status the server actually observed, when a transition was refused.
+  string observed_status = 2;
+
+  // Present on REASON_MIN_ORDER_NOT_MET and the tip reasons.
+  Money required_amount = 3;
+  Money max_amount = 4;
+
+  // Present on REASON_COURIER_SUSPENDED and REASON_RESTAURANT_NOT_ACCEPTING.
+  string until_rfc3339 = 5;
+
+  // Present on REASON_COURIER_CANCEL_COOLDOWN.
+  int32 recent_cancels = 6;
+
+  // Present on REASON_ITEM_UNAVAILABLE / REASON_INSUFFICIENT_STOCK.
+  string menu_item_id = 7;
+  int32 available_quantity = 8;
+
+  // Present on REASON_ACCURACY_TOO_LOW, in metres.
+  double accuracy_meters = 9;
+
+  // Present on REASON_INVALID_REASON_CODE — the code that was rejected.
+  string offending_code = 10;
+}

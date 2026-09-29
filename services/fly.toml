@@ -1,0 +1,40 @@
+app = "ravon-api"
+
+# Frankfurt. Fly has no Central Asia region, and `fra` is the realistic low-latency
+# European hop for Dushanbe (`waw` is the alternative).
+#
+# Explicitly NOT `sjc`, which the abandoned Ravon_android/backend/fly.toml inherited —
+# San Jose to Dushanbe is about the worst available choice.
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+
+  # min_machines_running = 1, not 0.
+  #
+  # The abandoned config had auto_stop with 0 minimum, which is right for a hobby web app
+  # and wrong here: a JVM cold start on a shared-cpu machine is seconds, and dispatch sits
+  # in the ordering path. A courier waiting on a scale-from-zero is a worse outcome than
+  # the cost of one always-on machine.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "20s"
+    method = "GET"
+    path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"

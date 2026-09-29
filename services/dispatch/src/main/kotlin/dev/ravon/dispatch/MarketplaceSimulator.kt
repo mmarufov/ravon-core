@@ -413,7 +413,7 @@ object MarketplaceSimulator {
      * the 9th decimal — enough to flip a greedy tie and lose one assignment on seed 1.
      * The recorded baseline pins the correct one.
      */
-    internal const val EPOCH_SECONDS = 721_692_800.0
+    const val EPOCH_SECONDS = 721_692_800.0
 
     /**
      * The same instant as [EPOCH_SECONDS], expressed as seconds since 1970.
@@ -423,7 +423,7 @@ object MarketplaceSimulator {
      * `Date`. Both constants are needed because Swift's `Date` exposes both and the
      * original uses each in a different place.
      */
-    internal const val EPOCH_UNIX_SECONDS = EPOCH_SECONDS + 978_307_200.0
+    const val EPOCH_UNIX_SECONDS = EPOCH_SECONDS + DispatchClock.UNIX_TO_REFERENCE_DATE
 
     private const val COURIER_KIND = 0x0000_0000_C0DE_0001L
     private const val ORDER_KIND = 0x0000_0000_0DDE_0001L
