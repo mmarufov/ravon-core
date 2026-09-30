@@ -185,7 +185,7 @@ def workers(temporal_address: str, ledger_db: str, provider_dsn: str,
 @pytest.fixture(autouse=True)
 def _reset_provider(provider_dsn: str) -> None:
     with psycopg.connect(provider_dsn, autocommit=True) as c:
-        c.execute("TRUNCATE provider_payouts")
+        c.execute("TRUNCATE provider_payouts, provider_objects, provider_faults")
 
 
 @pytest.fixture

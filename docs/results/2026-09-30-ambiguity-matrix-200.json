@@ -1,0 +1,276 @@
+{
+  "seeds": 200,
+  "ttl": 10,
+  "horizon": 40,
+  "status_timeout_p": 0.2,
+  "elapsed_s": 34.9,
+  "ledger_verify_balances_mismatches": 0,
+  "cells": {
+    "none": {
+      "fresh_key": {
+        "double": 0,
+        "orphaned": 0,
+        "phantom": 0,
+        "stuck": 0,
+        "wrong_money": 0,
+        "runs": 200,
+        "status_calls": 8000
+      },
+      "same_key": {
+        "double": 0,
+        "orphaned": 0,
+        "phantom": 0,
+        "stuck": 0,
+        "wrong_money": 0,
+        "runs": 200,
+        "status_calls": 8000
+      },
+      "fail_on_timeout": {
+        "double": 0,
+        "orphaned": 0,
+        "phantom": 0,
+        "stuck": 0,
+        "wrong_money": 0,
+        "runs": 200,
+        "status_calls": 8000
+      },
+      "status_first": {
+        "double": 0,
+        "orphaned": 0,
+        "phantom": 0,
+        "stuck": 0,
+        "wrong_money": 0,
+        "runs": 200,
+        "status_calls": 8000
+      }
+    },
+    "commit_then_timeout": {
+      "fresh_key": {
+        "double": 200,
+        "orphaned": 0,
+        "phantom": 0,
+        "stuck": 0,
+        "wrong_money": 200,
+        "runs": 200,
+        "status_calls": 7395
+      },
+      "same_key": {
+        "double": 0,
+        "orphaned": 0,
+        "phantom": 0,
+        "stuck": 0,
+        "wrong_money": 0,
+        "runs": 200,
+        "status_calls": 7395
+      },
+      "fail_on_timeout": {
+        "double": 0,
+        "orphaned": 200,
+        "phantom": 0,
+        "stuck": 0,
+        "wrong_money": 200,
+        "runs": 200,
+        "status_calls": 0
+      },
+      "status_first": {
+        "double": 0,
+        "orphaned": 0,
+        "phantom": 0,
+        "stuck": 0,
+        "wrong_money": 0,
+        "runs": 200,
+        "status_calls": 8000
+      }
+    },
+    "timeout_before_commit": {
+      "fresh_key": {
+        "double": 0,
+        "orphaned": 0,
+        "phantom": 0,
+        "stuck": 0,
+        "wrong_money": 0,
+        "runs": 200,
+        "status_calls": 7387
+      },
+      "same_key": {
+        "double": 0,
+        "orphaned": 0,
+        "phantom": 0,
+        "stuck": 0,
+        "wrong_money": 0,
+        "runs": 200,
+        "status_calls": 7387
+      },
+      "fail_on_timeout": {
+        "double": 0,
+        "orphaned": 0,
+        "phantom": 0,
+        "stuck": 0,
+        "wrong_money": 0,
+        "runs": 200,
+        "status_calls": 0
+      },
+      "status_first": {
+        "double": 0,
+        "orphaned": 0,
+        "phantom": 0,
+        "stuck": 0,
+        "wrong_money": 0,
+        "runs": 200,
+        "status_calls": 8000
+      }
+    },
+    "async_pending_then_paid": {
+      "fresh_key": {
+        "double": 200,
+        "orphaned": 0,
+        "phantom": 0,
+        "stuck": 0,
+        "wrong_money": 200,
+        "runs": 200,
+        "status_calls": 7395
+      },
+      "same_key": {
+        "double": 0,
+        "orphaned": 0,
+        "phantom": 0,
+        "stuck": 78,
+        "wrong_money": 0,
+        "runs": 200,
+        "status_calls": 7395
+      },
+      "fail_on_timeout": {
+        "double": 0,
+        "orphaned": 200,
+        "phantom": 0,
+        "stuck": 0,
+        "wrong_money": 200,
+        "runs": 200,
+        "status_calls": 0
+      },
+      "status_first": {
+        "double": 0,
+        "orphaned": 0,
+        "phantom": 0,
+        "stuck": 78,
+        "wrong_money": 0,
+        "runs": 200,
+        "status_calls": 8000
+      }
+    },
+    "async_pending_then_failed": {
+      "fresh_key": {
+        "double": 0,
+        "orphaned": 0,
+        "phantom": 0,
+        "stuck": 0,
+        "wrong_money": 0,
+        "runs": 200,
+        "status_calls": 7377
+      },
+      "same_key": {
+        "double": 0,
+        "orphaned": 0,
+        "phantom": 0,
+        "stuck": 67,
+        "wrong_money": 0,
+        "runs": 200,
+        "status_calls": 4989
+      },
+      "fail_on_timeout": {
+        "double": 0,
+        "orphaned": 0,
+        "phantom": 0,
+        "stuck": 0,
+        "wrong_money": 0,
+        "runs": 200,
+        "status_calls": 0
+      },
+      "status_first": {
+        "double": 0,
+        "orphaned": 0,
+        "phantom": 0,
+        "stuck": 68,
+        "wrong_money": 0,
+        "runs": 200,
+        "status_calls": 5618
+      }
+    },
+    "returned_after_delay": {
+      "fresh_key": {
+        "double": 0,
+        "orphaned": 0,
+        "phantom": 0,
+        "stuck": 0,
+        "wrong_money": 0,
+        "runs": 200,
+        "status_calls": 7399
+      },
+      "same_key": {
+        "double": 0,
+        "orphaned": 0,
+        "phantom": 0,
+        "stuck": 0,
+        "wrong_money": 0,
+        "runs": 200,
+        "status_calls": 1904
+      },
+      "fail_on_timeout": {
+        "double": 0,
+        "orphaned": 0,
+        "phantom": 0,
+        "stuck": 0,
+        "wrong_money": 0,
+        "runs": 200,
+        "status_calls": 0
+      },
+      "status_first": {
+        "double": 0,
+        "orphaned": 0,
+        "phantom": 0,
+        "stuck": 0,
+        "wrong_money": 0,
+        "runs": 200,
+        "status_calls": 2515
+      }
+    },
+    "key_expiry": {
+      "fresh_key": {
+        "double": 200,
+        "orphaned": 0,
+        "phantom": 0,
+        "stuck": 0,
+        "wrong_money": 200,
+        "runs": 200,
+        "status_calls": 4919
+      },
+      "same_key": {
+        "double": 200,
+        "orphaned": 0,
+        "phantom": 0,
+        "stuck": 0,
+        "wrong_money": 200,
+        "runs": 200,
+        "status_calls": 4919
+      },
+      "fail_on_timeout": {
+        "double": 0,
+        "orphaned": 200,
+        "phantom": 0,
+        "stuck": 0,
+        "wrong_money": 200,
+        "runs": 200,
+        "status_calls": 0
+      },
+      "status_first": {
+        "double": 0,
+        "orphaned": 0,
+        "phantom": 0,
+        "stuck": 0,
+        "wrong_money": 0,
+        "runs": 200,
+        "status_calls": 8000
+      }
+    }
+  }
+}
