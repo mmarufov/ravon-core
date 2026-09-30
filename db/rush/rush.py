@@ -202,6 +202,37 @@ async def open_conns(dsn: str, k: int, as_consumer: bool) -> list[psycopg.AsyncC
     return conns
 
 
+class Pool:
+    """K connections opened once and reused by every run at that K.
+
+    The pre-registration said to open K connections per run. The first two full
+    runs died on ephemeral-port exhaustion instead ("Can't assign requested
+    address"): 240 runs x K connections, doubled by the proxy, left thousands
+    of loopback sockets in TIME_WAIT on a machine where other sessions were
+    doing the same. Connection setup was never timed, so reusing connections
+    changes no reported number. Before each run every connection is checked:
+    a broken one is replaced, and any open transaction is rolled back.
+    """
+
+    def __init__(self, dsn: str, k: int, as_consumer: bool):
+        self.dsn, self.k, self.as_consumer = dsn, k, as_consumer
+        self.conns: list[psycopg.AsyncConnection] = []
+
+    async def ready(self) -> list[psycopg.AsyncConnection]:
+        if not self.conns:
+            self.conns = await open_conns(self.dsn, self.k, self.as_consumer)
+        for i, c in enumerate(self.conns):
+            if c.closed or c.broken:
+                self.conns[i] = (await open_conns(self.dsn, 1, self.as_consumer))[0]
+            elif c.info.transaction_status != psycopg.pq.TransactionStatus.IDLE:
+                await c.execute("ROLLBACK")
+        return self.conns
+
+    async def close(self) -> None:
+        await asyncio.gather(*[c.close() for c in self.conns])
+        self.conns = []
+
+
 async def fire(conns, checkout, seed: int) -> tuple[list[str], list[float], float]:
     order = list(range(len(conns)))
     random.Random(seed).shuffle(order)          # the only thing a seed controls
@@ -239,12 +270,12 @@ def summarize(run: Run, out: list[str], lat: list[float], wall: float) -> None:
     run.throughput_per_s = round(len(out) / wall, 1)
 
 
-async def run_strategy(admin_dsn: str, client_dsn: str, strategy: str, k: int,
+async def run_strategy(admin_dsn: str, pool: Pool, strategy: str, k: int,
                        latency_ms: int, r: int, proxy: toxi.Proxy | None) -> Run:
     with psycopg.connect(admin_dsn, autocommit=True) as a:
         a.execute("SELECT rush.reset(%s)", (N_PORTIONS,))
     run = Run("strategies", strategy, k, latency_ms, r, r, N_PORTIONS)
-    conns = await open_conns(client_dsn, k, as_consumer=False)
+    conns = await pool.ready()
     if proxy:
         proxy.set_latency(latency_ms)
         proxy.verify()
@@ -261,7 +292,6 @@ async def run_strategy(admin_dsn: str, client_dsn: str, strategy: str, k: int,
     finally:
         if proxy:
             proxy.set_latency(0)
-        await asyncio.gather(*[c.close() for c in conns])
     summarize(run, out, lat, wall)
     with psycopg.connect(admin_dsn, autocommit=True) as a:
         run.sold = a.execute("SELECT count(*) FROM rush.orders").fetchone()[0]
@@ -313,7 +343,7 @@ def reset_rpc(a: psycopg.Connection, cap: int | None) -> None:
               "is_accepting_orders = true WHERE id = %s", (cap, RESTAURANT))
 
 
-async def run_rpc(admin_dsn: str, client_dsn: str, scenario, k: int, r: int) -> Run:
+async def run_rpc(admin_dsn: str, pool: Pool, scenario, k: int, r: int) -> Run:
     name, scheduled, cap, item, bound = scenario
     with psycopg.connect(admin_dsn, autocommit=True) as a:
         reset_rpc(a, cap)
@@ -321,11 +351,8 @@ async def run_rpc(admin_dsn: str, client_dsn: str, scenario, k: int, r: int) -> 
                              timestamptz '2000-01-01 00:00+00') + interval '7 minutes'""").fetchone()[0] \
             if scheduled else None
     run = Run("rpc", name, k, 0, r, r, bound)
-    conns = await open_conns(client_dsn, k, as_consumer=True)
-    try:
-        out, lat, wall = await fire(conns, rpc_checkout(item, sched), r)
-    finally:
-        await asyncio.gather(*[c.close() for c in conns])
+    conns = await pool.ready()
+    out, lat, wall = await fire(conns, rpc_checkout(item, sched), r)
     summarize(run, out, lat, wall)
     live_excl = ("scheduled", "rejected", "cancelled", "cancelled_by_customer",
                  "cancelled_by_restaurant", "cancelled_by_system", "cancelled_by_courier")
@@ -440,6 +467,34 @@ def gate(runs: list[Run]) -> list[str]:
     return failures
 
 
+async def strategy_cells(admin_dsn, pool, k, lats, strategies, n_runs, proxy) -> list[Run]:
+    runs = []
+    for lat in lats:
+        for s in strategies:
+            for r in range(n_runs):
+                run = await run_strategy(admin_dsn, pool, s, k, lat, r, proxy)
+                runs.append(run)
+                print(f"{s:22s} K={k:<5d} +{lat:>3d}ms run {r}: sold={run.sold:<5d} "
+                      f"oversell={run.oversells:<4d} lost={run.lost_updates:<4d} "
+                      f"cons={run.conservation_violation} p50={run.p50_ms:.1f} "
+                      f"p99={run.p99_ms:.1f} {run.throughput_per_s:.0f}/s rtt={run.probe_rtt_ms} "
+                      f"{run.outcomes}", flush=True)
+    return runs
+
+
+async def rpc_cells(admin_dsn, pool, k, n_runs) -> list[Run]:
+    runs = []
+    for sc in RPC_SCENARIOS:
+        for r in range(n_runs):
+            run = await run_rpc(admin_dsn, pool, sc, k, r)
+            runs.append(run)
+            print(f"rpc/{sc[0]:18s} K={k:<5d} run {r}: live={run.sold:<5d} bound={run.bound} "
+                  f"oversell={run.oversells} cons={run.conservation_violation} "
+                  f"p50={run.p50_ms:.1f} p99={run.p99_ms:.1f} {run.outcomes} "
+                  f"{run.violations[:2]}", flush=True)
+    return runs
+
+
 async def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dsn", required=True, help="admin DSN of a database with db/schema applied and seeded")
@@ -478,27 +533,19 @@ async def main() -> int:
     runs: list[Run] = []
     if "strategies" in targets:
         for k in ks:
-            for lat in lats:
-                for s in args.strategies.split(","):
-                    for r in range(args.runs):
-                        run = await run_strategy(admin_dsn, client_dsn, s, k, lat, r, proxy)
-                        runs.append(run)
-                        print(f"{s:22s} K={k:<5d} +{lat:>3d}ms run {r}: sold={run.sold:<5d} "
-                              f"oversell={run.oversells:<4d} lost={run.lost_updates:<4d} "
-                              f"cons={run.conservation_violation} p50={run.p50_ms:.1f} "
-                              f"p99={run.p99_ms:.1f} {run.throughput_per_s:.0f}/s rtt={run.probe_rtt_ms} "
-                              f"{run.outcomes}",
-                              flush=True)
+            pool = Pool(client_dsn, k, as_consumer=False)
+            try:
+                runs += await strategy_cells(admin_dsn, pool, k, lats,
+                                             args.strategies.split(","), args.runs, proxy)
+            finally:
+                await pool.close()
     if "rpc" in targets:
         for k in ks:
-            for sc in RPC_SCENARIOS:
-                for r in range(args.runs):
-                    run = await run_rpc(admin_dsn, admin_dsn, sc, k, r)
-                    runs.append(run)
-                    print(f"rpc/{sc[0]:18s} K={k:<5d} run {r}: live={run.sold:<5d} bound={run.bound} "
-                          f"oversell={run.oversells} cons={run.conservation_violation} "
-                          f"p50={run.p50_ms:.1f} p99={run.p99_ms:.1f} {run.outcomes} "
-                          f"{run.violations[:2]}", flush=True)
+            pool = Pool(admin_dsn, k, as_consumer=True)
+            try:
+                runs += await rpc_cells(admin_dsn, pool, k, args.runs)
+            finally:
+                await pool.close()
     if proxy:
         proxy.delete()
 

@@ -1,0 +1,84 @@
+read_then_write        K=100   +  0ms run 0: sold=100   oversell=60   lost=99   cons=1 p50=36.2 p99=57.8 1718/s rtt=0.14 {'ok': 100}
+read_then_write        K=100   +  0ms run 1: sold=100   oversell=60   lost=99   cons=1 p50=35.4 p99=56.2 1766/s rtt=0.08 {'ok': 100}
+read_then_write        K=100   +  0ms run 2: sold=100   oversell=60   lost=99   cons=1 p50=38.5 p99=62.2 1598/s rtt=0.08 {'ok': 100}
+read_then_write        K=100   +  0ms run 3: sold=100   oversell=60   lost=99   cons=1 p50=39.0 p99=61.9 1605/s rtt=0.09 {'ok': 100}
+read_then_write        K=100   +  0ms run 4: sold=100   oversell=60   lost=99   cons=1 p50=73.5 p99=97.5 1021/s rtt=0.08 {'ok': 100}
+read_then_write        K=100   +  0ms run 5: sold=100   oversell=60   lost=99   cons=1 p50=62.2 p99=95.2 1041/s rtt=0.1 {'ok': 100}
+read_then_write        K=100   +  0ms run 6: sold=100   oversell=60   lost=99   cons=1 p50=55.3 p99=90.1 1102/s rtt=0.13 {'ok': 100}
+read_then_write        K=100   +  0ms run 7: sold=100   oversell=60   lost=99   cons=1 p50=62.5 p99=101.6 977/s rtt=0.11 {'ok': 100}
+read_then_write        K=100   +  0ms run 8: sold=100   oversell=60   lost=99   cons=1 p50=57.6 p99=94.4 1049/s rtt=0.15 {'ok': 100}
+read_then_write        K=100   +  0ms run 9: sold=100   oversell=60   lost=98   cons=1 p50=56.1 p99=89.5 1110/s rtt=0.13 {'ok': 100}
+row_lock               K=100   +  0ms run 0: sold=40    oversell=0    lost=0    cons=0 p50=35.7 p99=42.8 2319/s rtt=0.14 {'ok': 40, 'sold_out': 60}
+row_lock               K=100   +  0ms run 1: sold=40    oversell=0    lost=0    cons=0 p50=28.4 p99=34.1 2923/s rtt=0.21 {'ok': 40, 'sold_out': 60}
+row_lock               K=100   +  0ms run 2: sold=40    oversell=0    lost=0    cons=0 p50=27.5 p99=33.1 3010/s rtt=0.16 {'ok': 40, 'sold_out': 60}
+row_lock               K=100   +  0ms run 3: sold=40    oversell=0    lost=0    cons=0 p50=32.4 p99=39.6 2516/s rtt=0.14 {'ok': 40, 'sold_out': 60}
+row_lock               K=100   +  0ms run 4: sold=40    oversell=0    lost=0    cons=0 p50=31.1 p99=35.6 2798/s rtt=0.13 {'ok': 40, 'sold_out': 60}
+row_lock               K=100   +  0ms run 5: sold=40    oversell=0    lost=0    cons=0 p50=39.2 p99=47.1 2104/s rtt=0.14 {'ok': 40, 'sold_out': 60}
+row_lock               K=100   +  0ms run 6: sold=40    oversell=0    lost=0    cons=0 p50=29.2 p99=34.4 2888/s rtt=0.14 {'ok': 40, 'sold_out': 60}
+row_lock               K=100   +  0ms run 7: sold=40    oversell=0    lost=0    cons=0 p50=24.8 p99=29.5 3372/s rtt=0.15 {'ok': 40, 'sold_out': 60}
+row_lock               K=100   +  0ms run 8: sold=40    oversell=0    lost=0    cons=0 p50=24.4 p99=28.9 3449/s rtt=0.14 {'ok': 40, 'sold_out': 60}
+row_lock               K=100   +  0ms run 9: sold=40    oversell=0    lost=0    cons=0 p50=28.2 p99=32.8 3037/s rtt=0.13 {'ok': 40, 'sold_out': 60}
+conditional_decrement  K=100   +  0ms run 0: sold=40    oversell=0    lost=0    cons=0 p50=20.1 p99=25.1 3957/s rtt=0.17 {'ok': 40, 'sold_out': 60}
+conditional_decrement  K=100   +  0ms run 1: sold=40    oversell=0    lost=0    cons=0 p50=35.0 p99=41.0 2429/s rtt=0.15 {'ok': 40, 'sold_out': 60}
+conditional_decrement  K=100   +  0ms run 2: sold=40    oversell=0    lost=0    cons=0 p50=19.1 p99=24.3 4081/s rtt=0.15 {'ok': 40, 'sold_out': 60}
+conditional_decrement  K=100   +  0ms run 3: sold=40    oversell=0    lost=0    cons=0 p50=18.3 p99=23.1 4290/s rtt=0.14 {'ok': 40, 'sold_out': 60}
+conditional_decrement  K=100   +  0ms run 4: sold=40    oversell=0    lost=0    cons=0 p50=20.2 p99=25.4 3886/s rtt=0.13 {'ok': 40, 'sold_out': 60}
+conditional_decrement  K=100   +  0ms run 5: sold=40    oversell=0    lost=0    cons=0 p50=18.4 p99=24.0 4142/s rtt=0.18 {'ok': 40, 'sold_out': 60}
+conditional_decrement  K=100   +  0ms run 6: sold=40    oversell=0    lost=0    cons=0 p50=213.3 p99=220.9 452/s rtt=0.14 {'ok': 40, 'sold_out': 60}
+conditional_decrement  K=100   +  0ms run 7: sold=40    oversell=0    lost=0    cons=0 p50=18.0 p99=24.4 4087/s rtt=0.12 {'ok': 40, 'sold_out': 60}
+conditional_decrement  K=100   +  0ms run 8: sold=40    oversell=0    lost=0    cons=0 p50=17.2 p99=21.4 4647/s rtt=0.14 {'ok': 40, 'sold_out': 60}
+conditional_decrement  K=100   +  0ms run 9: sold=40    oversell=0    lost=0    cons=0 p50=16.0 p99=20.5 4861/s rtt=0.08 {'ok': 40, 'sold_out': 60}
+reservation_rows       K=100   +  0ms run 0: sold=40    oversell=0    lost=0    cons=0 p50=20.4 p99=23.9 4175/s rtt=0.13 {'ok': 40, 'sold_out': 60}
+reservation_rows       K=100   +  0ms run 1: sold=40    oversell=0    lost=0    cons=0 p50=19.8 p99=24.6 4034/s rtt=0.14 {'ok': 40, 'sold_out': 60}
+reservation_rows       K=100   +  0ms run 2: sold=40    oversell=0    lost=0    cons=0 p50=13.1 p99=14.7 6758/s rtt=0.21 {'ok': 40, 'sold_out': 60}
+reservation_rows       K=100   +  0ms run 3: sold=40    oversell=0    lost=0    cons=0 p50=16.7 p99=19.5 5103/s rtt=0.18 {'ok': 40, 'sold_out': 60}
+reservation_rows       K=100   +  0ms run 4: sold=40    oversell=0    lost=0    cons=0 p50=17.4 p99=19.9 4987/s rtt=0.17 {'ok': 40, 'sold_out': 60}
+reservation_rows       K=100   +  0ms run 5: sold=40    oversell=0    lost=0    cons=0 p50=12.0 p99=14.5 6870/s rtt=0.12 {'ok': 40, 'sold_out': 60}
+reservation_rows       K=100   +  0ms run 6: sold=40    oversell=0    lost=0    cons=0 p50=15.1 p99=16.5 6007/s rtt=0.15 {'ok': 40, 'sold_out': 60}
+reservation_rows       K=100   +  0ms run 7: sold=40    oversell=0    lost=0    cons=0 p50=13.0 p99=14.4 6901/s rtt=0.14 {'ok': 40, 'sold_out': 60}
+reservation_rows       K=100   +  0ms run 8: sold=40    oversell=0    lost=0    cons=0 p50=13.1 p99=15.3 6453/s rtt=0.12 {'ok': 40, 'sold_out': 60}
+reservation_rows       K=100   +  0ms run 9: sold=40    oversell=0    lost=0    cons=0 p50=10.3 p99=11.7 8494/s rtt=0.14 {'ok': 40, 'sold_out': 60}
+read_then_write        K=100   + 20ms run 0: sold=100   oversell=60   lost=99   cons=1 p50=2244.6 p99=4340.4 23/s rtt=21.34 {'ok': 100}
+read_then_write        K=100   + 20ms run 1: sold=100   oversell=60   lost=99   cons=1 p50=2218.4 p99=4333.7 23/s rtt=21.19 {'ok': 100}
+read_then_write        K=100   + 20ms run 2: sold=100   oversell=60   lost=99   cons=1 p50=2357.0 p99=4477.4 22/s rtt=22.39 {'ok': 100}
+read_then_write        K=100   + 20ms run 3: sold=100   oversell=60   lost=99   cons=1 p50=2307.7 p99=4498.4 22/s rtt=21.58 {'ok': 100}
+read_then_write        K=100   + 20ms run 4: sold=100   oversell=60   lost=99   cons=1 p50=2241.0 p99=4416.3 22/s rtt=21.68 {'ok': 100}
+read_then_write        K=100   + 20ms run 5: sold=100   oversell=60   lost=99   cons=1 p50=2278.7 p99=4432.6 22/s rtt=21.58 {'ok': 100}
+read_then_write        K=100   + 20ms run 6: sold=100   oversell=60   lost=99   cons=1 p50=2314.5 p99=4517.9 22/s rtt=21.87 {'ok': 100}
+read_then_write        K=100   + 20ms run 7: sold=100   oversell=60   lost=99   cons=1 p50=2333.5 p99=4479.0 22/s rtt=21.13 {'ok': 100}
+read_then_write        K=100   + 20ms run 8: sold=100   oversell=60   lost=99   cons=1 p50=2442.9 p99=4616.0 22/s rtt=21.5 {'ok': 100}
+read_then_write        K=100   + 20ms run 9: sold=100   oversell=60   lost=99   cons=1 p50=2250.5 p99=4361.1 23/s rtt=21.35 {'ok': 100}
+row_lock               K=100   + 20ms run 0: sold=40    oversell=0    lost=0    cons=0 p50=62.8 p99=71.4 1395/s rtt=21.43 {'ok': 40, 'sold_out': 60}
+row_lock               K=100   + 20ms run 1: sold=40    oversell=0    lost=0    cons=0 p50=61.7 p99=71.3 1395/s rtt=21.36 {'ok': 40, 'sold_out': 60}
+row_lock               K=100   + 20ms run 2: sold=40    oversell=0    lost=0    cons=0 p50=60.8 p99=72.2 1378/s rtt=20.94 {'ok': 40, 'sold_out': 60}
+row_lock               K=100   + 20ms run 3: sold=40    oversell=0    lost=0    cons=0 p50=70.1 p99=82.3 1208/s rtt=21.25 {'ok': 40, 'sold_out': 60}
+row_lock               K=100   + 20ms run 4: sold=40    oversell=0    lost=0    cons=0 p50=63.2 p99=74.5 1335/s rtt=21.43 {'ok': 40, 'sold_out': 60}
+Traceback (most recent call last):
+  File "/private/tmp/ravon-shopify-build/db/rush/rush.py", line 524, in <module>
+    sys.exit(asyncio.run(main()))
+             ^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.12/3.12.13/Frameworks/Python.framework/Versions/3.12/lib/python3.12/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.12/3.12.13/Frameworks/Python.framework/Versions/3.12/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.12/3.12.13/Frameworks/Python.framework/Versions/3.12/lib/python3.12/asyncio/base_events.py", line 691, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/private/tmp/ravon-shopify-build/db/rush/rush.py", line 484, in main
+    run = await run_strategy(admin_dsn, client_dsn, s, k, lat, r, proxy)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/ravon-shopify-build/db/rush/rush.py", line 247, in run_strategy
+    conns = await open_conns(client_dsn, k, as_consumer=False)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/ravon-shopify-build/db/rush/rush.py", line 201, in open_conns
+    conns += await asyncio.gather(*[one() for _ in range(min(50, k - i))])
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/ravon-shopify-build/db/rush/rush.py", line 193, in one
+    c = await psycopg.AsyncConnection.connect(dsn, autocommit=True)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/ravon-shopify-venv/lib/python3.12/site-packages/psycopg/connection_async.py", line 144, in connect
+    raise last_ex.with_traceback(None)
+psycopg.OperationalError: connection is bad: connection to server at "127.0.0.1", port 25438 failed: Can't assign requested address
+	Is the server running on that host and accepting TCP/IP connections?
