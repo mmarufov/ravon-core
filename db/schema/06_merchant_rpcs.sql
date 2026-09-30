@@ -168,7 +168,7 @@ END;
 $$;
 
 -- ---------------------------------------------------------------------------
--- ravon_inventory_violations — stock conservation, as data.
+-- ravon_inventory_violations: stock conservation, as data.
 --
 -- For every item, `initial + restocks = stock_count + units held by orders`,
 -- which in ledger form is: stock_count equals the sum of its movements, and the

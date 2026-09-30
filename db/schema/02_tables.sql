@@ -482,7 +482,7 @@ CREATE INDEX IF NOT EXISTS courier_cancellation_log_recent_idx
   ON public.courier_cancellation_log(courier_id, created_at DESC);
 
 -- ===========================================================================
--- inventory_movements — the stock ledger. `menu_items.stock_count` is a cached
+-- inventory_movements: the stock ledger. `menu_items.stock_count` is a cached
 -- balance of this table, and ravon_inventory_violations() (invariants.sql)
 -- asserts the two agree.
 --
@@ -521,7 +521,7 @@ CREATE TABLE IF NOT EXISTS public.inventory_movements (
 CREATE INDEX IF NOT EXISTS inventory_movements_item_idx ON public.inventory_movements(menu_item_id);
 
 -- ===========================================================================
--- kitchen_slots — how many scheduled orders a restaurant has promised to start
+-- kitchen_slots: how many scheduled orders a restaurant has promised to start
 -- in one 15-minute window. `max_concurrent_orders` bounds the live queue for
 -- order-now checkouts, but scheduled orders were exempt at checkout and never
 -- counted at activation, so 60 pre-orders for 18:00 all went live at 18:00

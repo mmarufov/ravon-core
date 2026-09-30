@@ -32,7 +32,7 @@
 -- are removed from both INSERTs. This is not a style change: it is what makes
 -- a desynchronised total impossible rather than merely incorrect-if-buggy.
 --
--- STOCK — reserved at checkout for every order, order-now and scheduled alike,
+-- STOCK: reserved at checkout for every order, order-now and scheduled alike,
 -- through ravon_reserve_stock (06_merchant_rpcs.sql), which writes the
 -- `reserve` rows the cancel paths later release. At 65ad66c a scheduled order
 -- was checked against stock but reserved nothing and skipped the capacity
@@ -42,7 +42,7 @@
 -- so 2 + 2 against a stock of 3 is a typed INSUFFICIENT_STOCK instead of
 -- SQLSTATE 23514 from the CHECK constraint.
 --
--- CAPACITY — a scheduled order takes a place in a 15-minute kitchen slot
+-- CAPACITY: a scheduled order takes a place in a 15-minute kitchen slot
 -- (kitchen_slots, 02_tables.sql) with a conditional increment. Order-now
 -- checkouts keep the live-queue count against max_concurrent_orders. The two
 -- budgets are separate: an activating slot is not checked against the live

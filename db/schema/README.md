@@ -28,7 +28,7 @@ Supabase provides natively. **Never apply that file to Supabase.**
 |---|---|
 | `00_prelude.sql` | pgcrypto, haversine, CSPRNG code generator |
 | `01_types.sql` | the two real enums (`order_status`, `user_role`) |
-| `02_tables.sql` | 16 tables |
+| `02_tables.sql` | 19 tables: the 16 the apps use, plus the stock ledger `inventory_movements`, `kitchen_slots` and `kitchen_slot_holds` |
 | `03_lifecycle.sql` | `order_transitions` (36 edges) + the enforcing trigger |
 | `04_orderability.sql` | hours / open-closed / `set_accepting_orders` |
 | `05_order_create.sql` | `validate_cart`, `create_order` |
@@ -40,7 +40,8 @@ Supabase provides natively. **Never apply that file to Supabase.**
 | `11_rls.sql` | policies and the visibility helpers |
 | `12_grants.sql` | **the deny-by-default baseline — applied last** |
 | `13_realtime_storage.sql` | buckets, the realtime publication, cron |
-| `invariants.sql` | assertions; the CI gate |
+| `invariants.sql` | assertions; the CI gate. The last three are stock conservation |
+| `tests/` | pytest against a real PostgreSQL: pre-order stock, kitchen capacity, the stock ledger |
 | `seed.sql` | one consumer, one merchant + restaurant + menu, one courier |
 | `walk.sql` | the end-to-end walk, including the refusals |
 
@@ -99,6 +100,21 @@ trigger reads that transaction-local GUC to pick the right edge — a consumer c
 and a merchant cancel differ only in who called. A status write with no actor
 declared is rejected outright, which is what makes "there is no other legal way to
 move an order" true rather than aspirational.
+
+**Stock is a ledger.** `menu_items.stock_count` is the cached balance of
+`inventory_movements`. `create_order` writes a `reserve` row at checkout, for
+order-now and scheduled orders alike; `ravon_restore_stock` writes the matching
+`release` at most once (`UNIQUE (order_id, menu_item_id, kind)`); a trigger logs any
+other edit as `adjust`. `ravon_inventory_violations()` must return nothing. A scheduled
+order also takes a place in a 15-minute `kitchen_slots` row, capped at
+`max_concurrent_orders`. Why this exists, and what it replaced, is in
+`db/rush/FINDINGS.md`.
+
+```bash
+cd db/schema
+RAVON_DSN=postgresql://postgres@127.0.0.1:5432/postgres python -m pytest tests
+tests/negative_control.sh 65ad66c     # the same tests against the pre-fix schema
+```
 
 ## Known residuals
 

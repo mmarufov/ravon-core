@@ -347,9 +347,9 @@ BEGIN
   END IF;
 
   -- =========================================================================
-  -- STOCK — conservation, and the two structural guarantees behind it.
+  -- STOCK: conservation, and the two structural guarantees behind it.
   --
-  -- The 32 checks above are about the catalog: grants, policies, generated
+  -- The 31 checks above are about the catalog: grants, policies, generated
   -- columns, the transition table. They all passed at 65ad66c while scheduled
   -- pre-orders let 60 orders go live for 40 portions, because nothing here
   -- checked behaviour and no test in the repo touched stock. A catalog
@@ -359,13 +359,13 @@ BEGIN
   SELECT string_agg(format('%s: %s', check_name, detail), '; ') INTO v_bad
   FROM public.ravon_inventory_violations();
   IF v_bad IS NOT NULL THEN
-    RAISE EXCEPTION 'STOCK — conservation violated: %', v_bad;
+    RAISE EXCEPTION 'STOCK: conservation violated: %', v_bad;
   END IF;
 
   -- Returning units twice must be a constraint violation, not a bug to find.
   IF NOT EXISTS (SELECT 1 FROM pg_constraint
                  WHERE conname = 'inventory_movements_once' AND contype = 'u') THEN
-    RAISE EXCEPTION 'STOCK — inventory_movements has no UNIQUE (order_id, menu_item_id, kind)';
+    RAISE EXCEPTION 'STOCK: inventory_movements has no UNIQUE (order_id, menu_item_id, kind)';
   END IF;
 
   -- The regression, by name. A clamp on stock anywhere in the order paths
@@ -375,7 +375,7 @@ BEGIN
   WHERE n.nspname = 'public'
     AND p.prosrc ~* 'greatest\s*\(\s*0\s*,\s*[a-z_.]*stock_count';
   IF v_bad IS NOT NULL THEN
-    RAISE EXCEPTION 'STOCK — GREATEST(0, stock_count ...) clamp in: %', v_bad;
+    RAISE EXCEPTION 'STOCK: GREATEST(0, stock_count ...) clamp in: %', v_bad;
   END IF;
 
   RAISE NOTICE 'all invariants hold';
