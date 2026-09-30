@@ -209,6 +209,10 @@ is easy to read them as meaning more.
 | **`Assign` over gRPC, gRPC-Web and Protobuf-JSON** | `services/server/` — Armeria, no Envoy |
 | **Proto contract + `buf breaking` gate** | `proto/`, CI job `proto-contract` |
 | **178 tests, all passing** | 142 Swift (`swift test`) + 36 Kotlin (`./gradlew test`) |
+| **Double-entry ledger in PostgreSQL** | `db/ledger/`: integer minor units, balanced at COMMIT by a deferred constraint trigger, idempotent posting by key. 85 tests; a Hypothesis state machine makes 1,019 postings, and 7 tests kill 18 backends mid-transaction (`KILL-TESTS 7 of 85; total kills 18`, printed by the suite). CI job `ledger-invariants`. Local PostgreSQL only; it is not wired to orders, whose money is still `numeric(10,2)` |
+| **The authored database schema** | `db/schema/`: 16 tables, the 36-edge transition table enforced by a trigger, every RPC the apps call. Applied to a fresh PostgreSQL 17 in CI and checked by `invariants.sql` (CI job `db-invariants`). Runs locally; there is no hosted instance |
+| **Probabilistic ETA and anomaly detection** | `ml/`: a pytest suite and a report-drift gate (CI job `ml-evaluation`). Measured on simulated orders only, and **no app uses it**: the consumer ETA is still haversine distance over a fixed speed |
+| **Payout saga, hand-built vs Temporal** | `db/temporal_payout/`: the same crash matrix against both. Local Temporal dev server only, not in CI |
 
 ### Simulated — real code, synthetic world
 
@@ -228,13 +232,14 @@ is easy to read them as meaning more.
 | JWT interceptor on the service | `Assign` is pure computation and unauthenticated; the first authenticated RPC lands with the ledger tier |
 | `GetOffer` — the per-courier offer projection | Declared in the contract, returns `UNIMPLEMENTED`. It needs order state. It exists in `v1` now so the gate guards it from the start |
 | The apps calling the service | The engine is live and the contract is fixed; no client generates against it yet |
-| Double-entry ledger | No schema, no tests, no CI job at the documented commit. A concurrent effort has scaffolded `db/ledger/`, but it currently holds only a Python virtualenv |
-| Probabilistic ETA, forecasting, anomaly detection | Not verified here. A concurrent effort is building a Python layer under `ml/`; nothing in this README depends on it |
+| The ledger wired to orders | The ledger is tested on its own. Order totals are `numeric(10,2)` and the apps decode `Double` |
+| ML in the product | The ETA model is evaluated offline; the apps do not call it |
+| Demand forecasting | Not built |
 | Batching (multiple orders per courier) | Not modelled — the largest gap vs. the reference architecture |
 | Courier acceptance probability | Not modelled. There is no `courier_decline_order` RPC |
 | Dispatch wired to the app | The engine and its evaluation exist; no `dispatch_tick`, still `claim_order` |
 
-### One service runs. There is still no database.
+### One service runs. There is no hosted database.
 
 The dispatch service is live at [`ravon-api.fly.dev`](https://ravon-api.fly.dev) — which is
 possible precisely because `Assign` is **pure computation**: couriers and orders in,
@@ -266,8 +271,9 @@ Consequences still worth knowing:
 - The 19 original SQL migrations were an incomplete record even when the project existed:
   14 of 15 tables touched by Swift were never created by a migration, and six Postgres
   enums were created through the dashboard. They now live in `db/migrations/`, tracked.
-- A concurrent effort is reconstructing the schema under `db/schema/` from the union of
-  migrations, Swift `Codable` models and call sites. Nothing in this README depends on it.
+- The schema has been rebuilt under `db/schema/` from the union of migrations, Swift
+  `Codable` models and call sites. It applies to a local PostgreSQL 17 and CI asserts its
+  invariants, but no hosted database runs it, so the apps still have nothing to talk to.
 - `scripts/schema_drift.py` reports 15 unverified findings, and that number is a **floor**:
   its `case` parser reads only the first identifier per line, so it is blind to 36 of 265
   wire keys — including `Profile.role` and `MenuItem.price`.
@@ -313,8 +319,8 @@ through the FFM API, which was still a preview feature in 21.
 
 ### CI gates
 
-Seven jobs in `.github/workflows/ci.yml`, all green. Each exists because of a specific
-class of defect:
+Nine jobs in `.github/workflows/ci.yml`, all green on `main`. Each exists because of a
+specific class of defect:
 
 | job | catches |
 |---|---|
@@ -323,7 +329,9 @@ class of defect:
 | `dispatch-quality` | dispatch getting worse for real couriers, which no unit test would notice. Runs the Kotlin engine **and** the over-the-wire server suite |
 | `proto-contract` | an incompatible schema change reaching a shipped iOS app, which has no forced-upgrade path. `buf lint` + `buf breaking` against `main` |
 | `schema-drift` | Swift `CodingKeys` diverging from the SQL columns. Not a compile error, not a test failure — a **decode crash in a shipped iOS app** |
-| `ledger-invariants` | money conservation, enforced by a deferred constraint trigger rather than application code |
+| `ledger-invariants` | money conservation, enforced by a deferred constraint trigger rather than application code, including under killed backends |
+| `ml-evaluation` | an ML method that stops behaving, or a README/FINDINGS number that no longer matches what the code produces |
+| `db-invariants` | a grant, policy, constraint or generated column that drifted from the security rules, asserted against a freshly applied PostgreSQL 17 |
 | `secret-scan` | a committed `service_role` JWT, which would be a full database compromise. Decodes every JWT and inspects the `role` claim rather than grepping for a word that legitimately appears in docs |
 
 **A gate nobody has watched fail should not be trusted**, and this repository has direct
