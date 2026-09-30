@@ -212,7 +212,7 @@ is easy to read them as meaning more.
 | **Double-entry ledger in PostgreSQL** | `db/ledger/`: integer minor units, balanced at COMMIT by a deferred constraint trigger, idempotent posting by key. 85 tests; a Hypothesis state machine makes 1,019 postings, and 7 tests kill 18 backends mid-transaction (`KILL-TESTS 7 of 85; total kills 18`, printed by the suite). CI job `ledger-invariants`. Local PostgreSQL only; it is not wired to orders, whose money is still `numeric(10,2)` |
 | **The authored database schema** | `db/schema/`: 16 tables, the 36-edge transition table enforced by a trigger, every RPC the apps call. Applied to a fresh PostgreSQL 17 in CI and checked by `invariants.sql` (CI job `db-invariants`). Runs locally; there is no hosted instance |
 | **Probabilistic ETA and anomaly detection** | `ml/`: a pytest suite and a report-drift gate (CI job `ml-evaluation`). Measured on simulated orders only, and **no app uses it**: the consumer ETA is still haversine distance over a fixed speed |
-| **Payout saga, hand-built vs Temporal** | `db/temporal_payout/`: the same crash matrix against both, on a Temporal dev server (CI job `temporal-payout`). Never run against a production Temporal cluster |
+| **Payout saga, hand-built vs Temporal** | `db/temporal_payout/`: the same crash matrix against both, on a Temporal dev server (CI job `temporal-payout`). Never run against a production Temporal cluster. A lost provider reply is handled status-first: in a simulated, pre-registered matrix (4 strategies x 6 fault modes x 200 seeds) it had 0 double or orphaned payouts in 1,200 runs, where failing on the timeout had 600. [Details](db/temporal_payout/README.md#when-the-providers-reply-is-lost) |
 
 ### Simulated — real code, synthetic world
 
