@@ -47,5 +47,20 @@ class Proxy:
                        "toxicity": 1.0, "attributes": {"latency": ms, "jitter": 0}})
             self.latency_ms = ms
 
+    def verify(self) -> None:
+        """Read the proxy back and fail loudly unless it has exactly the toxic we set.
+
+        Added after the first full run was aborted: two toxiproxy-server processes
+        had been bound to the default port 8474 by different sessions, so an API
+        call could land on a server that did not hold this proxy. rush.py now
+        uses a private server on its own port, and checks rather than assumes.
+        """
+        got = self._req("GET", f"/proxies/{self.name}")
+        toxics = got.get("toxics") or []
+        want = [self.latency_ms] if self.latency_ms else []
+        have = [t["attributes"]["latency"] for t in toxics if t.get("type") == "latency"]
+        if have != want or len(toxics) != len(want) or got.get("listen") != self.listen:
+            raise RuntimeError(f"proxy {self.name} is {got}, expected latency {want}")
+
     def delete(self) -> None:
         self._req("DELETE", f"/proxies/{self.name}")

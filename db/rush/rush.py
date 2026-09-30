@@ -178,6 +178,7 @@ class Run:
     wall_s: float = 0.0
     outcomes: dict = field(default_factory=dict)
     activated: int | None = None
+    probe_rtt_ms: float | None = None
 
 
 def nearest_rank(sorted_ms: list[float], p: float) -> float:
@@ -246,6 +247,15 @@ async def run_strategy(admin_dsn: str, client_dsn: str, strategy: str, k: int,
     conns = await open_conns(client_dsn, k, as_consumer=False)
     if proxy:
         proxy.set_latency(latency_ms)
+        proxy.verify()
+    # Measured, not assumed: the median of 3 `SELECT 1` round trips on one of
+    # the connections, after the toxic is set and before the release.
+    rtts = []
+    for _ in range(3):
+        t = time.perf_counter()
+        await conns[0].execute("SELECT 1")
+        rtts.append((time.perf_counter() - t) * 1000.0)
+    run.probe_rtt_ms = round(statistics.median(rtts), 2)
     try:
         out, lat, wall = await fire(conns, CHECKOUT[strategy], r)
     finally:
@@ -369,6 +379,8 @@ def cells(runs: list[Run]) -> list[dict]:
             "p50_ms_median": round(statistics.median(r.p50_ms for r in rs), 2),
             "p99_ms_median": round(statistics.median(r.p99_ms for r in rs), 2),
             "throughput_median": round(statistics.median(r.throughput_per_s for r in rs), 1),
+            "probe_rtt_ms_median": (round(statistics.median(r.probe_rtt_ms for r in rs), 2)
+                                    if all(r.probe_rtt_ms is not None for r in rs) else None),
         })
     return out
 
@@ -474,7 +486,8 @@ async def main() -> int:
                         print(f"{s:22s} K={k:<5d} +{lat:>3d}ms run {r}: sold={run.sold:<5d} "
                               f"oversell={run.oversells:<4d} lost={run.lost_updates:<4d} "
                               f"cons={run.conservation_violation} p50={run.p50_ms:.1f} "
-                              f"p99={run.p99_ms:.1f} {run.throughput_per_s:.0f}/s {run.outcomes}",
+                              f"p99={run.p99_ms:.1f} {run.throughput_per_s:.0f}/s rtt={run.probe_rtt_ms} "
+                              f"{run.outcomes}",
                               flush=True)
     if "rpc" in targets:
         for k in ks:
