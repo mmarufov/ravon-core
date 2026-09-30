@@ -302,3 +302,20 @@ def test_a_full_kitchen_slot_refuses_the_26th_preorder_and_frees_on_cancel(db):
         with pytest.raises(Rejected):
             create_order(consumer, [(PLOV, 1)], sched)
         assert violations(admin) == []
+
+
+# ---------------------------------------------------------------------------
+# Found while building the fix, and NOT fixed here (db/rush/FINDINGS.md, F4).
+# ---------------------------------------------------------------------------
+@pytest.mark.xfail(strict=True, raises=psycopg.errors.RaiseException,
+                   reason="scheduled -> cancelled_by_system is not a declared edge, so the "
+                          "sweep's closed-restaurant branch aborts the whole sweep")
+def test_a_preorder_at_a_closed_restaurant_does_not_block_every_other_activation(db):
+    with psycopg.connect(db, autocommit=True) as admin, actor(db, CONSUMER) as consumer:
+        set_capacity(admin, None)
+        sched = schedule_time(admin)
+        create_order(consumer, [(PLOV, 1)], sched)
+        admin.execute("UPDATE public.restaurants SET restaurant_status = 'paused' WHERE id = %s",
+                      (RESTAURANT,))
+        activate_due(admin)       # raises 'undeclared order transition' today
+        assert stock(admin) == 40

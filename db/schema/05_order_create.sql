@@ -32,6 +32,22 @@
 -- are removed from both INSERTs. This is not a style change: it is what makes
 -- a desynchronised total impossible rather than merely incorrect-if-buggy.
 --
+-- STOCK — reserved at checkout for every order, order-now and scheduled alike,
+-- through ravon_reserve_stock (06_merchant_rpcs.sql), which writes the
+-- `reserve` rows the cancel paths later release. At 65ad66c a scheduled order
+-- was checked against stock but reserved nothing and skipped the capacity
+-- check, and the activation sweep then decremented with GREATEST(0, ...): 60
+-- pre-orders for 40 portions all went live, against a capacity of 25, and
+-- stock read 0. Duplicate cart lines are now summed per item before the check,
+-- so 2 + 2 against a stock of 3 is a typed INSUFFICIENT_STOCK instead of
+-- SQLSTATE 23514 from the CHECK constraint.
+--
+-- CAPACITY — a scheduled order takes a place in a 15-minute kitchen slot
+-- (kitchen_slots, 02_tables.sql) with a conditional increment. Order-now
+-- checkouts keep the live-queue count against max_concurrent_orders. The two
+-- budgets are separate: an activating slot is not checked against the live
+-- queue at that moment (see db/rush/FINDINGS.md).
+--
 -- ANON — both functions now require auth.uid(). `create_order` previously
 -- inserted `user_id = auth.uid()`, and whether an anon caller could create an
 -- ownerless order depended on whether `orders.user_id` was NOT NULL, which was
@@ -65,6 +81,8 @@ DECLARE
   subtotal     numeric := 0;
   active_count int;
   rec          record;
+  item_totals  jsonb;
+  slot_full    boolean;
 BEGIN
   IF auth.uid() IS NULL THEN
     RAISE EXCEPTION 'not_authenticated'
@@ -106,6 +124,27 @@ BEGIN
     END IF;
   END IF;
 
+  -- A scheduled order is refused when its kitchen slot is full (create_order).
+  IF p_scheduled_for IS NOT NULL AND r.max_concurrent_orders IS NOT NULL THEN
+    SELECT ks.taken >= ks.capacity INTO slot_full
+    FROM public.kitchen_slots ks
+    WHERE ks.restaurant_id = r.id
+      AND ks.slot_start = date_bin('15 minutes', p_scheduled_for,
+                                   timestamptz '2000-01-01 00:00+00');
+    IF COALESCE(slot_full, false) AND orderable THEN
+      orderable := false; reason := jsonb_build_object('kind','OVERLOADED');
+    END IF;
+  END IF;
+
+  -- Stock is compared against the whole cart's demand for an item, not one
+  -- line's: the consumer app splits an item across lines when the lines carry
+  -- different modifiers.
+  SELECT COALESCE(jsonb_object_agg(menu_item_id, total), '{}'::jsonb) INTO item_totals
+  FROM (SELECT it->>'menu_item_id' AS menu_item_id, sum((it->>'quantity')::int) AS total
+        FROM jsonb_array_elements(p_items) AS it
+        GROUP BY 1) t
+  WHERE menu_item_id IS NOT NULL;
+
   FOR rec IN
     SELECT (it->>'menu_item_id')::uuid AS menu_item_id,
            (it->>'quantity')::int      AS quantity,
@@ -127,7 +166,8 @@ BEGIN
         -- N8: surfaced as a per-item status rather than a bare constraint error.
         st := jsonb_build_object('menu_item_id', rec.menu_item_id, 'status','UNAVAILABLE');
         orderable := false;
-      ELSIF mi.stock_count IS NOT NULL AND mi.stock_count < rec.quantity THEN
+      ELSIF mi.stock_count IS NOT NULL
+            AND mi.stock_count < (item_totals->>(rec.menu_item_id::text))::int THEN
         st := jsonb_build_object('menu_item_id', rec.menu_item_id,
                                  'status','INSUFFICIENT_STOCK','have', mi.stock_count);
         orderable := false;
@@ -192,6 +232,7 @@ DECLARE
   rec            record;
   mi             public.menu_items%ROWTYPE;
   addr_snapshot  jsonb;
+  v_slot         timestamptz;
 BEGIN
   IF v_uid IS NULL THEN
     RAISE EXCEPTION 'not_authenticated'
@@ -261,6 +302,7 @@ BEGIN
       USING ERRCODE='P0001', DETAIL=jsonb_build_object('reason','CART_EMPTY')::text;
   END IF;
 
+  -- Per-line validation first, so a negative line cannot hide inside a sum.
   FOR rec IN
     SELECT (it->>'menu_item_id')::uuid AS menu_item_id,
            (it->>'quantity')::int      AS quantity
@@ -272,7 +314,18 @@ BEGIN
           'reason','INVALID_QUANTITY','menu_item_id', rec.menu_item_id,
           'quantity', rec.quantity)::text;
     END IF;
+  END LOOP;
 
+  -- Then once per ITEM, with every line for it summed, and in menu_item_id
+  -- order so that two checkouts (or a checkout and ravon_restore_stock) lock
+  -- item rows in the same order.
+  FOR rec IN
+    SELECT (it->>'menu_item_id')::uuid        AS menu_item_id,
+           sum((it->>'quantity')::int)::int   AS quantity
+    FROM jsonb_array_elements(p_items) AS it
+    GROUP BY 1
+    ORDER BY 1
+  LOOP
     SELECT * INTO mi FROM public.menu_items WHERE id = rec.menu_item_id FOR UPDATE;
     IF NOT FOUND OR mi.deleted_at IS NOT NULL OR mi.is_available = false THEN
       RAISE EXCEPTION 'item_unavailable'
@@ -302,6 +355,27 @@ BEGIN
         'reason','MIN_ORDER_NOT_MET','need', r.min_order_amount)::text;
   END IF;
 
+  -- A scheduled order takes a place in its kitchen slot now, at checkout, so
+  -- that the refusal happens while the buyer is still looking at the screen
+  -- rather than as a system cancel at activation. The conditional increment is
+  -- the capacity check; the restaurant row lock above already serialises this
+  -- block, and the WHERE clause would keep it correct without that lock.
+  IF p_scheduled_for IS NOT NULL AND r.max_concurrent_orders IS NOT NULL THEN
+    v_slot := date_bin('15 minutes', p_scheduled_for, timestamptz '2000-01-01 00:00+00');
+    INSERT INTO public.kitchen_slots(restaurant_id, slot_start, capacity)
+    VALUES (r.id, v_slot, r.max_concurrent_orders)
+    ON CONFLICT (restaurant_id, slot_start) DO NOTHING;
+
+    UPDATE public.kitchen_slots
+    SET taken = taken + 1
+    WHERE restaurant_id = r.id AND slot_start = v_slot AND taken < capacity;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'kitchen_slot_full'
+        USING ERRCODE='P0001', DETAIL=jsonb_build_object(
+          'reason','OVERLOADED','slot_start', v_slot)::text;
+    END IF;
+  END IF;
+
   -- `total` is GENERATED and must not appear here.
   INSERT INTO public.orders(
     user_id, restaurant_id, address_id, status,
@@ -310,6 +384,11 @@ BEGIN
     v_uid, p_restaurant_id, p_address_id, status_value,
     subtotal, r.delivery_fee, addr_snapshot, p_notes, p_scheduled_for)
   RETURNING id INTO new_order_id;
+
+  IF v_slot IS NOT NULL THEN
+    INSERT INTO public.kitchen_slot_holds(order_id, restaurant_id, slot_start)
+    VALUES (new_order_id, r.id, v_slot);
+  END IF;
 
   FOR rec IN
     SELECT (it->>'menu_item_id')::uuid AS menu_item_id,
@@ -325,13 +404,11 @@ BEGIN
     VALUES (
       new_order_id, mi.id, rec.quantity, mi.price,
       mi.name, mi.description, mi.image_url, '[]'::jsonb);
-
-    IF p_scheduled_for IS NULL AND mi.stock_count IS NOT NULL THEN
-      UPDATE public.menu_items
-      SET stock_count = stock_count - rec.quantity
-      WHERE id = mi.id;
-    END IF;
   END LOOP;
+
+  -- One reservation per item for the summed quantity, order-now and scheduled
+  -- alike. The activation sweep consumes it and does not decrement again.
+  PERFORM public.ravon_reserve_stock(new_order_id);
 
   RETURN new_order_id;
 END;

@@ -480,3 +480,76 @@ CREATE TABLE IF NOT EXISTS public.courier_cancellation_log (
 );
 CREATE INDEX IF NOT EXISTS courier_cancellation_log_recent_idx
   ON public.courier_cancellation_log(courier_id, created_at DESC);
+
+-- ===========================================================================
+-- inventory_movements — the stock ledger. `menu_items.stock_count` is a cached
+-- balance of this table, and ravon_inventory_violations() (invariants.sql)
+-- asserts the two agree.
+--
+-- Why a ledger rather than a flag: at 65ad66c three code paths decided, at three
+-- different times, who held a unit (create_order at scheduling, the activation
+-- sweep, six cancel RPCs), and they disagreed. A scheduled order that was
+-- activated never got its units back, and activation clamped a would-be oversell
+-- to zero with GREATEST(0, ...). Here every change to a tracked item's stock is
+-- a row, and "returned twice" is a UNIQUE violation rather than a bug to find.
+--
+--   adjust   a merchant or operator edit of stock_count (logged by trigger, 09)
+--   reserve  create_order took `-quantity` for an order, at checkout, for both
+--            order-now and scheduled orders
+--   release  a cancel gave the same units back; at most once per order and item
+--
+-- `quantity` is the signed delta applied to stock_count. There is no `consume`
+-- row: a reservation that is never released is a sale.
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS public.inventory_movements (
+  id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  menu_item_id uuid NOT NULL REFERENCES public.menu_items(id),
+  order_id     uuid REFERENCES public.orders(id),
+  kind         text NOT NULL CHECK (kind IN ('adjust','reserve','release')),
+  quantity     int  NOT NULL,
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT inventory_movements_sign CHECK (
+       (kind = 'reserve' AND quantity < 0)
+    OR (kind = 'release' AND quantity > 0)
+    OR  kind = 'adjust'),
+  CONSTRAINT inventory_movements_order_iff_not_adjust CHECK ((kind = 'adjust') = (order_id IS NULL)),
+  -- Exactly once. An order reserves an item once (create_order sums duplicate
+  -- cart lines first) and releases it at most once. NULL order_id (adjust rows)
+  -- is outside the constraint by design.
+  CONSTRAINT inventory_movements_once UNIQUE (order_id, menu_item_id, kind)
+);
+CREATE INDEX IF NOT EXISTS inventory_movements_item_idx ON public.inventory_movements(menu_item_id);
+
+-- ===========================================================================
+-- kitchen_slots — how many scheduled orders a restaurant has promised to start
+-- in one 15-minute window. `max_concurrent_orders` bounds the live queue for
+-- order-now checkouts, but scheduled orders were exempt at checkout and never
+-- counted at activation, so 60 pre-orders for 18:00 all went live at 18:00
+-- against a capacity of 25.
+--
+-- A place is taken with a conditional increment,
+--   UPDATE ... SET taken = taken + 1 WHERE taken < capacity
+-- which is correct even without the restaurant row lock create_order also
+-- holds, and the CHECK makes a full slot unrepresentable, not merely unlikely.
+-- `capacity` is copied from max_concurrent_orders when the slot is first used;
+-- a later change to the restaurant does not resize existing slots.
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS public.kitchen_slots (
+  restaurant_id uuid NOT NULL REFERENCES public.restaurants(id),
+  slot_start    timestamptz NOT NULL,
+  capacity      int NOT NULL CHECK (capacity > 0),
+  taken         int NOT NULL DEFAULT 0,
+  PRIMARY KEY (restaurant_id, slot_start),
+  CONSTRAINT kitchen_slots_within_capacity CHECK (taken >= 0 AND taken <= capacity)
+);
+
+-- One row per scheduled order holding a place. `released_at` is the
+-- exactly-once flag: a release flips it from NULL in the same statement that
+-- decides whether to give the place back.
+CREATE TABLE IF NOT EXISTS public.kitchen_slot_holds (
+  order_id      uuid PRIMARY KEY REFERENCES public.orders(id),
+  restaurant_id uuid NOT NULL,
+  slot_start    timestamptz NOT NULL,
+  released_at   timestamptz,
+  FOREIGN KEY (restaurant_id, slot_start) REFERENCES public.kitchen_slots(restaurant_id, slot_start)
+);

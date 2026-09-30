@@ -288,13 +288,11 @@ BEGIN
         updated_at = now()
       WHERE id = rec.id;
 
-      -- Stock was NOT decremented at creation for scheduled orders, so it is
-      -- taken now, at activation.
-      UPDATE public.menu_items mi
-      SET stock_count = GREATEST(0, mi.stock_count - oi.quantity)
-      FROM public.order_items oi
-      WHERE oi.order_id = rec.id AND oi.menu_item_id = mi.id
-        AND mi.stock_count IS NOT NULL;
+      -- Nothing is decremented here. Stock and the kitchen-slot place were
+      -- reserved at checkout (create_order), and activation consumes that
+      -- reservation. At 65ad66c this block decremented a second time with
+      -- GREATEST(0, stock - qty), which never refused anything: 60 activations
+      -- against 40 portions ended at stock 0 with 60 live orders.
 
       v_activated := v_activated + 1;
     ELSE
@@ -303,6 +301,8 @@ BEGIN
         cancellation_reason_code = 'RESTAURANT_NOT_OPEN_AT_SCHEDULED_TIME',
         expected_action_by = NULL, updated_at = now()
       WHERE id = rec.id;
+      -- Its reservation dies with it.
+      PERFORM public.ravon_restore_stock(rec.id);
     END IF;
   END LOOP;
 
