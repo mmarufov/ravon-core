@@ -1,0 +1,2 @@
+-r ../ledger/tests/requirements.txt
+temporalio==1.33.0
