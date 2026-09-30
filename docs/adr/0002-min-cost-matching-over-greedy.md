@@ -129,5 +129,8 @@ to stop living in a client package — see [ADR 0005](0005-extract-to-kotlin-not
 
 ## Verification
 
-`swift test --filter 'Dispatch|Hungarian'` — 15 tests, all passing. Runs as its own
-required CI job (`dispatch-quality`).
+`./gradlew :dispatch:test --tests '*HungarianSolverTest' --tests '*DispatchBaselineTest'`
+from `services/`: 14 tests, all passing. These are the Kotlin port of the Swift
+`HungarianSolverTests` and `DispatchSimulationTests`, which were deleted with the Swift
+engine in #12. Runs in the required CI job `dispatch-quality`, which runs all 29 dispatch
+tests.
