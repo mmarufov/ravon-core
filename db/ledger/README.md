@@ -242,6 +242,23 @@ path runs, and the result must always be exactly one ledger effect:
 `during_begin`, `after_begin`, `after_provider_call`, `after_mark_submitted`,
 `during_post`, `after_post`, and a no-crash control.
 
+**How many backends that actually is.** Every run ends with a line counted by
+`tests/killcount.py`, which increments inside `kill()` only after
+`pg_terminate_backend(pid, 5000)` has confirmed the backend exited:
+
+```
+KILL-TESTS 7 of 85; total kills 18
+```
+
+Five of the seven are in `test_crash_atomicity.py`, and the Hypothesis run in
+`test_crashing_at_any_point_in_a_run_of_postings_loses_only_the_last` accounts
+for 12 of the 18 kills. The other two are the saga's `during_begin` and
+`during_post`. The `after_*` saga boundaries kill nothing: a crash *between*
+committed steps has no transaction in flight, so the test models it by skipping
+straight to the resume path. The count was cross-checked against the server log,
+which wrote 18 "terminating connection due to administrator command" lines for
+the same run (PostgreSQL 17.10, 2026-09-30).
+
 ---
 
 ## Reproducibility and runtime

@@ -21,6 +21,7 @@ import psycopg
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+import killcount
 from chart import CURRENCY, escrow_for, open_chart
 from conftest import reset_ledger
 from ledger_api import Ledger, authorize_entries, fingerprint_of
@@ -35,6 +36,7 @@ def kill(admin: psycopg.Connection, pid: int) -> None:
     with admin.cursor() as cur:
         cur.execute("SELECT pg_terminate_backend(%s, 5000)", (pid,))
         assert cur.fetchone()[0] is True, "backend did not terminate"
+    killcount.record()
 
 
 def backend_pid(conn: psycopg.Connection) -> int:

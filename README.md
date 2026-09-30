@@ -5,7 +5,8 @@ courier iOS apps over one shared Swift package, a PostgreSQL data model, and a d
 engine that assigns couriers to orders as a minimum-cost matching problem rather than a
 first-come-first-served job board. This repository is `RavonCore`: the shared package, the
 dispatch engine and its evaluation harness, the order lifecycle model, and the CI gates.
-The service tier is **currently being extracted to Kotlin/gRPC** and does not exist yet.
+The dispatch service tier has been **extracted to Kotlin/gRPC and is deployed** at
+[`ravon-api.fly.dev`](https://ravon-api.fly.dev); the order and ledger tiers are not.
 
 The interesting part of a delivery marketplace is not the CRUD. It is deciding which
 courier gets which order, proving that decision is correct, and measuring whether it is
@@ -94,18 +95,25 @@ an adjacent zone even when they are closest.
 | The order lifecycle graph is live | 17 property-based invariants over a declared 36-edge, 17-state, 4-actor transition table |
 | The graph is cyclic, and termination is not free | Tarjan SCC pass found exactly one cycle — courier cancellation requeues the order — so termination depends on a server-side rate limit, which is now asserted |
 | Simulations are reproducible | same seed ⇒ identical assignments, delivery times, travel and per-courier job counts |
+| The Kotlin port did not change the algorithm | 30 seeds × 2 dispatchers × 11 metrics reproduced from the Swift original, doubles compared **bitwise** — 660 numbers, not a tolerance |
+| An incompatible `.proto` change fails the build | `buf breaking` exits **100** on a renumbered or deleted field and **0** on an added one — measured, not assumed |
 
 The lifecycle suite caught a modelling error in its own author's first version of the
 transition table. That is the argument for declaring the state machine as data.
 
 ### Provenance of these numbers
 
-Measured against the working tree of branch `mmarufov/bucharest-v9`, parent commit
-[`737911a`](https://github.com/mmarufov/ravon-core/commit/737911a). **The dispatch sources
-and their tests are not yet committed at that SHA** — they are untracked in the working
-tree. Once they land, this line should cite the dispatch commit instead. Figures have
-drifted as the simulator changed (an earlier draft recorded +42.2%); the numbers above are
-what `swift test` and the simulator produce today, and they replace the earlier ones.
+The dispatch sources and their tests are committed and run in CI. Since
+[`17b5db0`](https://github.com/mmarufov/ravon-core/commit/17b5db0) the engine is **Kotlin**,
+and these figures are produced by `./gradlew :dispatch:test` — reproducing the Swift
+original bit-for-bit, which is what makes them the same numbers rather than merely similar
+ones.
+
+Figures drifted while the simulator changed: an earlier draft of these docs recorded
++42.2% orders and "−1.4% courier travel". Both were superseded by measurement. The travel
+figure was the misleading one — the mean is −1.06%, but the worst single seed is **+2.13%**,
+so optimal matching sometimes drives *further*, and "no measurable travel penalty" is the
+defensible claim rather than "less travel".
 
 ---
 
@@ -129,7 +137,8 @@ flowchart TB
 
     subgraph trusted["Trusted — server-side, holds credentials clients never see"]
         direction TB
-        SVC["<b>Service tier</b> (Kotlin, in extraction)<br/>dispatch · order saga · ledger · fraud"]
+        DISP["<b>ravon-api</b> — Kotlin, deployed<br/>dispatch: min-cost matching"]
+        SVC["<b>Service tier</b> — not built<br/>order saga · ledger · fraud"]
         PG[("<b>PostgreSQL</b><br/>RLS · pg_cron · PostGIS<br/>append-only transition log")]
         RT["Realtime<br/>(Postgres CDC → WebSocket)"]
         AUTH["Supabase Auth<br/>email OTP · JWT"]
@@ -141,6 +150,7 @@ flowchart TB
     CORE ==>|"PostgREST: reads"| PG
     CORE ==>|"WebSocket: order status,<br/>courier location, chat"| RT
     CORE ==>|"JWT"| AUTH
+    CORE -.->|"gRPC-Web: Assign"| DISP
     CORE -.->|"gRPC: writes"| SVC
 
     AUTH -.->|"JWKS verify, sub → user id"| SVC
@@ -148,6 +158,7 @@ flowchart TB
     style trusted fill:#f6f6f8,stroke:#1A1A2E,stroke-width:2px
     style clients fill:#fff4f1,stroke:#FF3008,stroke-width:2px
     style SVC stroke-dasharray: 5 5
+    style DISP fill:#eaf7ee,stroke:#1A1A2E,stroke-width:2px
 ```
 
 Four things this diagram is trying to say:
@@ -161,9 +172,14 @@ Four things this diagram is trying to say:
    so they go to the service tier. Reads and subscriptions stay on PostgREST and Postgres
    CDC because those already work and rebuilding them buys nothing. This is what an
    incremental extraction looks like partway through.
-3. **Dispatch is currently in the wrong place** — it lives in the *client* package, and a
-   phone cannot see the other couriers. It is there because that is where it could be
-   built and measured. It is the first thing that moves.
+3. **Dispatch has moved server-side**, and the reason it went first is worth stating
+   precisely. The usual framing — "it shipped in the client package, and a phone cannot
+   see the other couriers" — was true about where the code sat and false about what was
+   happening: *nothing called it*. It was a research artifact compiled into three app
+   binaries as dead weight. The real reason it went first is that it had a **test oracle**
+   — a complete reference implementation to diff against — so the port was provable and
+   carried no regression risk. Only `Assign` is dashed-to here because no client generates
+   against the contract yet.
 4. **Realtime is change-data-capture, not a second source of truth.**
 
 → [Diagram notes](docs/architecture.md) · [ADR 0005](docs/adr/0005-extract-to-kotlin-not-rewrite.md)
@@ -188,7 +204,15 @@ is easy to read them as meaning more.
 | 17 property-based lifecycle invariants incl. Tarjan SCC | `Tests/.../OrderLifecycleInvariantTests.swift` |
 | Email-OTP auth flow, typed errors, shared SwiftUI | `UI/Auth/` |
 | Schema-drift and JWT-decoding credential CI gates | `scripts/` |
-| 163 tests, all passing | `swift test` |
+| **Kotlin dispatch service, deployed** | [`ravon-api.fly.dev`](https://ravon-api.fly.dev) — 2 machines, Frankfurt |
+| **Bit-exact Kotlin port of the engine** | `services/dispatch/` — 660 baseline numbers matched exactly |
+| **`Assign` over gRPC, gRPC-Web and Protobuf-JSON** | `services/server/` — Armeria, no Envoy |
+| **Proto contract + `buf breaking` gate** | `proto/`, CI job `proto-contract` |
+| **178 tests, all passing** | 142 Swift (`swift test`) + 36 Kotlin (`./gradlew test`) |
+| **Double-entry ledger in PostgreSQL** | `db/ledger/`: integer minor units, balanced at COMMIT by a deferred constraint trigger, idempotent posting by key. 85 tests; a Hypothesis state machine makes 1,019 postings, and 7 tests kill 18 backends mid-transaction (`KILL-TESTS 7 of 85; total kills 18`, printed by the suite). CI job `ledger-invariants`. Local PostgreSQL only; it is not wired to orders, whose money is still `numeric(10,2)` |
+| **The authored database schema** | `db/schema/`: 16 tables, the 36-edge transition table enforced by a trigger, every RPC the apps call. Applied to a fresh PostgreSQL 17 in CI and checked by `invariants.sql` (CI job `db-invariants`). Runs locally; there is no hosted instance |
+| **Probabilistic ETA and anomaly detection** | `ml/`: a pytest suite and a report-drift gate (CI job `ml-evaluation`). Measured on simulated orders only, and **no app uses it**: the consumer ETA is still haversine distance over a fixed speed |
+| **Payout saga, hand-built vs Temporal** | `db/temporal_payout/`: the same crash matrix against both. Local Temporal dev server only, not in CI |
 
 ### Simulated — real code, synthetic world
 
@@ -204,30 +228,55 @@ is easy to read them as meaning more.
 
 | | Status |
 |---|---|
-| Kotlin / gRPC service tier | No `services/` directory. Planned; [ADR 0005](docs/adr/0005-extract-to-kotlin-not-rewrite.md) |
-| Protobuf contracts and compatibility gate | Planned |
-| Double-entry ledger | No schema, no tests, no CI job at the documented commit. A concurrent effort has scaffolded `db/ledger/`, but it currently holds only a Python virtualenv |
-| Probabilistic ETA, forecasting, anomaly detection | Not verified here. A concurrent effort is building a Python layer under `ml/`; nothing in this README depends on it |
+| Order and ledger service tiers | Only `dispatch` is extracted. [ADR 0005](docs/adr/0005-extract-to-kotlin-not-rewrite.md) |
+| JWT interceptor on the service | `Assign` is pure computation and unauthenticated; the first authenticated RPC lands with the ledger tier |
+| `GetOffer` — the per-courier offer projection | Declared in the contract, returns `UNIMPLEMENTED`. It needs order state. It exists in `v1` now so the gate guards it from the start |
+| The apps calling the service | The engine is live and the contract is fixed; no client generates against it yet |
+| The ledger wired to orders | The ledger is tested on its own. Order totals are `numeric(10,2)` and the apps decode `Double` |
+| ML in the product | The ETA model is evaluated offline; the apps do not call it |
+| Demand forecasting | Not built |
 | Batching (multiple orders per courier) | Not modelled — the largest gap vs. the reference architecture |
 | Courier acceptance probability | Not modelled. There is no `courier_decline_order` RPC |
 | Dispatch wired to the app | The engine and its evaluation exist; no `dispatch_tick`, still `claim_order` |
 
-### No running backend
+### One service runs. There is no hosted database.
 
-**The Supabase project behind this system has been deleted.** The host returns NXDOMAIN
-and the Management API returns 404 "Resource has been removed" for the project ref. The
-three iOS apps are backend-less. Nothing here can be run against live data.
+The dispatch service is live at [`ravon-api.fly.dev`](https://ravon-api.fly.dev) — which is
+possible precisely because `Assign` is **pure computation**: couriers and orders in,
+assignments out, no persistence and no auth. That is why it was extracted first.
 
-Consequences worth knowing:
+Everything that needs storage is still blocked. **The Supabase project behind this system
+was deleted** — the host returns NXDOMAIN and the Management API returns 404 "Resource has
+been removed" for the project ref. The three iOS apps remain backend-less and nothing here
+can be run against live data.
 
-- The 19 SQL migrations live in `.context/`, which is gitignored, so they are not in this
-  repository. They were also an incomplete record even when the project existed: 14 of 15
-  tables touched by Swift were never created by a migration, and six Postgres enums were
-  created through the dashboard.
-- The `schema-drift` CI job reads `.context/migrations` and therefore **cannot pass on
-  GitHub** as currently written. It passes locally, where the directory exists.
-- The three iOS app repositories (consumer, merchant, courier) are separate and not part
-  of this repo, so nothing here verifies their contents.
+```
+$ curl https://ravon-api.fly.dev/health
+{"healthy":true}
+
+$ curl -X POST https://ravon-api.fly.dev/ravon.dispatch.v1.DispatchService/Assign \
+    -H 'Content-Type: application/json' -d @batch.json
+{"assignments":[
+  {"courierId":"…c0de-0","orderId":"…0dde-1","costMinutes":-23.976121668543847},
+  {"courierId":"…c0de-1","orderId":"…0dde-0","costMinutes":-10.989687123474436}]}
+```
+
+That response is worth reading closely: courier 0 is *nearer* order 0, and the matcher
+crossed them anyway, because order 1 is older and its urgency credit outweighs the extra
+distance. Negative costs are the credits applied. That crossing is the entire reason the
+matcher exists — a greedy dispatcher cannot produce it.
+
+Consequences still worth knowing:
+
+- The 19 original SQL migrations were an incomplete record even when the project existed:
+  14 of 15 tables touched by Swift were never created by a migration, and six Postgres
+  enums were created through the dashboard. They now live in `db/migrations/`, tracked.
+- The schema has been rebuilt under `db/schema/` from the union of migrations, Swift
+  `Codable` models and call sites. It applies to a local PostgreSQL 17 and CI asserts its
+  invariants, but no hosted database runs it, so the apps still have nothing to talk to.
+- `scripts/schema_drift.py` reports 15 unverified findings, and that number is a **floor**:
+  its `case` parser reads only the first identifier per line, so it is blind to 36 of 265
+  wire keys — including `Profile.role` and `MenuItem.price`.
 
 The best incident story in the project came from this: when the backend disappeared, the
 apps rendered "backend deleted" and "no orders today" identically. A typed service state
@@ -239,41 +288,69 @@ that distinguishes *degraded* from *empty* is the fix, and it is not built eithe
 
 ```bash
 swift build
-swift test                                  # 163 tests: 102 XCTest + 61 swift-testing
+swift test                                  # 142 tests: 81 XCTest + 61 swift-testing
+
+cd services && ./gradlew test               # 36 Kotlin tests
 ```
 
 Targeted suites:
 
 ```bash
-swift test --filter 'Dispatch|Hungarian'    # 15 — dispatch quality and solver optimality
-swift test --filter 'Switchback'            #  7 — experiment-design bias study
-swift test --filter 'OrderLifecycle'        # 17 — state-machine invariants
+swift test --filter 'OrderLifecycle'                    # 17 — state-machine invariants
+cd services
+./gradlew :dispatch:test --tests '*DispatchBaselineTest' #  7 — 30-seed bit-exact baseline
+./gradlew :dispatch:test --tests '*HungarianSolverTest'  #  7 — incl. 300-matrix optimality
+./gradlew :dispatch:test --tests '*Switchback*'          #  7 — experiment-design bias
+./gradlew :server:test                                   #  7 — Assign over the wire
 ```
 
-Requires Swift 5.9+, iOS 17+ / macOS 14+. The only third-party dependency is
-[`supabase-swift`](https://github.com/supabase/supabase-swift).
+Run the service locally, and call it:
+
+```bash
+cd services && ./gradlew :server:run         # :8080
+curl localhost:8080/health
+open http://localhost:8080/docs              # Armeria's RPC explorer
+```
+
+Swift side requires Swift 5.9+, iOS 17+ / macOS 14+, with
+[`supabase-swift`](https://github.com/supabase/supabase-swift) the only third-party
+dependency. Kotlin side needs a **JDK 22 or newer** — `Libm` reaches the platform libm
+through the FFM API, which was still a preview feature in 21.
 
 ### CI gates
 
-Five jobs in `.github/workflows/ci.yml`. Each exists because of a specific class of defect:
+Nine jobs in `.github/workflows/ci.yml`, all green on `main`. Each exists because of a
+specific class of defect:
 
 | job | catches |
 |---|---|
-| `test` | ordinary regressions, across the whole suite |
+| `test` | ordinary regressions, across the whole Swift suite |
 | `lifecycle-invariants` | a state-machine change that breaks liveness or visibility — a marketplace correctness bug, not a flaky test |
-| `dispatch-quality` | dispatch getting worse for real couriers, which no unit test would notice |
+| `dispatch-quality` | dispatch getting worse for real couriers, which no unit test would notice. Runs the Kotlin engine **and** the over-the-wire server suite |
+| `proto-contract` | an incompatible schema change reaching a shipped iOS app, which has no forced-upgrade path. `buf lint` + `buf breaking` against `main` |
 | `schema-drift` | Swift `CodingKeys` diverging from the SQL columns. Not a compile error, not a test failure — a **decode crash in a shipped iOS app** |
+| `ledger-invariants` | money conservation, enforced by a deferred constraint trigger rather than application code, including under killed backends |
+| `ml-evaluation` | an ML method that stops behaving, or a README/FINDINGS number that no longer matches what the code produces |
+| `db-invariants` | a grant, policy, constraint or generated column that drifted from the security rules, asserted against a freshly applied PostgreSQL 17 |
 | `secret-scan` | a committed `service_role` JWT, which would be a full database compromise. Decodes every JWT and inspects the `role` claim rather than grepping for a word that legitimately appears in docs |
 
-Two honest notes. The workflow file is **untracked at the documented commit, so CI has
-never actually run** — there is no green badge to point at, and that is why there is no
-badge in this README. And `schema-drift` will fail on GitHub until the migrations are
-tracked, for the reason given above.
+**A gate nobody has watched fail should not be trusted**, and this repository has direct
+evidence for why. `schema-drift` was *structurally incapable of passing* from the day it
+was written — it read a gitignored directory — and nobody noticed for months, because CI
+had never executed at all. Both are fixed; the lesson is kept.
 
-Both scripts run locally:
+So `proto-contract` was proven by breaking it on purpose:
+
+| change | `buf breaking` |
+|---|---|
+| renumber a field | exit **100** |
+| delete a field | exit **100** |
+| **add** a field | exit **0** — additive changes stay allowed |
+
+Both scripts also run locally:
 
 ```bash
-python3 scripts/schema_drift.py    # 0 drift, 15 unverified
+python3 scripts/schema_drift.py    # 0 drift, 15 unverified — a floor, see above
 python3 scripts/scan_secrets.py .  # clean
 ```
 
@@ -299,6 +376,49 @@ system is a different decision that often gets conflated with it.
 
 ---
 
+## Porting an algorithm without changing it
+
+The Kotlin engine had to reproduce the Swift original **exactly**, not approximately —
+otherwise every measured claim above would quietly become a claim about different code.
+The bar was all 660 baseline numbers, compared bitwise. Three things had to be right, and
+none of them was visible before the fixture demanded them:
+
+**Swift's random range-mapping is not one algorithm.** SplitMix64 transcribes in ten
+lines. The mapping from 64 raw bits into a range does not: `next(upperBound:)` takes a
+**power-of-two fast path** that masks low bits, and otherwise uses **Lemire's
+nearly-divisionless** method. Implementing either alone fails — five golden vectors match
+Lemire, and the sixth, whose bound is exactly 2⁵³, only matches the mask.
+
+**`Math.sin` is not `sin`.** Measured over 600 bearings drawn from the simulator's own
+generator:
+
+| implementation | disagrees with Swift |
+|---|---|
+| `Math.sin` / `Math.cos` | **20.3%** of inputs |
+| `StrictMath.sin` / `StrictMath.cos` | **9.0%** |
+| platform libm via the FFM API | **0%** |
+
+One ULP sounds ignorable. It is not: the simulator feeds these into a cost comparison, and
+a last-bit flip near a tie changes which courier wins an assignment.
+
+**Swift's `Date` epoch is 2001, not 1970.** `Date` stores
+`timeIntervalSinceReferenceDate`, so the cost model's arithmetic happens at magnitude
+7.2 × 10⁸ rather than 1.7 × 10⁹ — and a double has different residual precision at each.
+Using the Unix value produced costs wrong in the *ninth decimal*, which flipped one greedy
+tie and lost exactly one assignment on seed 1 (109 against the recorded 110).
+
+None of these is findable by reading the code carefully. Each was found by a fixture that
+refused to accept "close enough" — which is the argument for setting the bar at bitwise in
+the first place.
+
+One divergence remains and is documented rather than hidden: the Box-Muller gaussian is
+1 ULP off and cannot be closed. It is unreachable in the verified regime, because
+`gaussian` short-circuits at `sigma <= 0` and the baseline configuration has every sigma
+zero — a dedicated test pins exactly that, so removing the short-circuit fails loudly.
+Under latent noise, compare distributions rather than bits.
+
+---
+
 ## Architecture Decision Records
 
 Each one states the problem, the options weighed, what was chosen, and what it cost.
@@ -309,9 +429,10 @@ Each one states the problem, the options weighed, what was chosen, and what it c
 | [0002](docs/adr/0002-min-cost-matching-over-greedy.md) | Solve dispatch as minimum-cost matching, and do not minimise distance |
 | [0003](docs/adr/0003-deterministic-simulation-as-evaluation.md) | Evaluate dispatch by deterministic simulation, with latent state |
 | [0004](docs/adr/0004-zone-partitioning.md) | Zone partitioning: tractability *and* measurability, at a real cost |
-| [0005](docs/adr/0005-extract-to-kotlin-not-rewrite.md) | Extract a Kotlin service tier; do not rewrite the backend — **proposed, not built** |
+| [0005](docs/adr/0005-extract-to-kotlin-not-rewrite.md) | Extract a Kotlin service tier; do not rewrite the backend — **dispatch tier built and deployed; order and ledger tiers not** |
 | [0006](docs/adr/0006-postgres-over-kafka.md) | Implement the event guarantees on Postgres, not on Kafka |
 | [0007](docs/adr/0007-rejected-technologies.md) | Technologies deliberately not used, and what would change that |
+| [0008](docs/adr/0008-proto-contract-and-compatibility-gate.md) | The `.proto` files are the contract, and a gate enforces it |
 
 ## Further reading
 
