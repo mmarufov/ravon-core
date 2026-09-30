@@ -190,6 +190,46 @@ jobs:
           HYPOTHESIS_PROFILE: ci
         run: python -m pytest tests -p no:cacheprovider
 
+  ml-evaluation:
+    name: ML evaluation (Python)
+    # macOS, like dispatch-quality, and for a related reason: the report-drift check
+    # compares against a metrics.json regenerated on macOS arm64 with numpy on
+    # Accelerate. The versions are pinned for the same reason. Tolerance, not bitwise;
+    # see scripts/ml_report_drift.py for the measurement behind it.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ml/requirements-lock.txt
+
+      - name: Install
+        run: |
+          python -m pip install -r ml/requirements-lock.txt
+          python -m pip install --no-deps -e ml
+
+      # CRPS and PIT scoring, the non-parametric floor, parameter recovery on known
+      # Weibulls, the leakage re-derivations and the anomaly detector's injected ground
+      # truth. RuntimeWarnings are errors (pyproject.toml), so a silent NaN fails here.
+      - name: ML test suite
+        working-directory: ml
+        run: python -m pytest -q -p no:cacheprovider
+
+      - name: Report drift tool self-test
+        run: python scripts/ml_report_drift.py --self-test
+
+      # The tests check that the methods behave. This checks that the numbers the
+      # README and FINDINGS quote are still the numbers the code produces.
+      - name: Regenerate reports/metrics.json
+        working-directory: ml
+        run: python -m ravon_ml.cli
+
+      - name: Report drift check
+        run: python scripts/ml_report_drift.py
+
   secret-scan:
     name: Secret scan
     runs-on: ubuntu-latest

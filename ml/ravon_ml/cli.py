@@ -3,9 +3,11 @@
     python -m ravon_ml.cli            # full run, writes reports/
     python -m ravon_ml.cli --quick    # skip the slow anomaly sweeps
 
-Nothing here samples without a seed, so two runs on the same dataset produce
-byte-identical `reports/metrics.json`. That is the repo standard and it is the only
-reason any of these numbers are worth quoting.
+Nothing here samples without a seed, so two runs on the same dataset produce the same
+`reports/metrics.json` to about 13 significant figures. Not bitwise: floating-point
+summation order moves the last bits. CI regenerates the report and fails if any number
+moves by more than 1e-6 relative (`scripts/ml_report_drift.py`). Reproducibility is the
+only reason any of these numbers are worth quoting.
 """
 
 from __future__ import annotations
@@ -137,8 +139,8 @@ def run(quick: bool = False) -> dict:
 
     report["figures"] = _figures(train, test, report, transform_example)
 
-    # Runtime is printed, not written: the committed artefact has to be byte-identical
-    # across runs, and a timing is the one thing in here that cannot be.
+    # Runtime is printed, not written: the committed artefact has to reproduce across
+    # runs, and a timing is the one thing in here that cannot.
     out = REPORTS_DIR / "metrics.json"
     out.write_text(json.dumps(report, indent=2, sort_keys=True, default=_json_default))
     print(f"wrote {out} in {time.time() - started:.1f}s")
