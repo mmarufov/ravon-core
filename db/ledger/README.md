@@ -259,6 +259,14 @@ straight to the resume path. The count was cross-checked against the server log,
 which wrote 18 "terminating connection due to administrator command" lines for
 the same run (PostgreSQL 17.10, 2026-09-30).
 
+CI makes that cross-check permanent without a server log. `tools/pg_killcount.py`
+reads the server's own `pg_stat_database.sessions_killed` around every test, so
+it counts what PostgreSQL saw rather than what the harness called, and the
+`ledger-invariants` job runs the suite with `-p pg_killcount --expect-kills 7:18`:
+if either number moves, the job fails. Its self-test (`tools/test_pg_killcount.py`)
+has two negative controls: a connection closed normally counts 0, and an
+`--expect-kills` that disagrees with the run fails the session.
+
 ---
 
 ## Reproducibility and runtime
@@ -282,7 +290,7 @@ Runtime dials, and the trade-off:
 | `LEDGER_STEP_COUNT` | 40 | longer sequences reach deeper states — settlement after several refunds, say — but each example costs proportionally more |
 | `HYPOTHESIS_PROFILE` | `ci` | `dev` turns off `derandomize` and keeps a local example database, so repeated runs explore new ground and remember past failures |
 
-Measured: the full suite (85 tests) runs in **~11 s against PostgreSQL 16** with
+Measured: the full suite (85 tests) runs in **~12 s against PostgreSQL 16** with
 CI settings on an M-series laptop. The `ledger-invariants` CI job is sized to stay well under a
 minute; `LEDGER_MAX_EXAMPLES=100` is the dial to turn if it stops doing so. The
 honest trade-off is that the state machine finds interleaving bugs in proportion

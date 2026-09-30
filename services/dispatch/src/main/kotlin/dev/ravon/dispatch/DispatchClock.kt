@@ -11,8 +11,10 @@ package dev.ravon.dispatch
  *
  * That is not a rounding curiosity. Computing the same quantities in Unix seconds
  * produced costs that differed in the ninth decimal, which was enough to flip a greedy
- * tie and lose exactly one assignment on the very first seed of the baseline. The
- * conversion is load-bearing.
+ * tie and lose exactly one assignment on the very first seed of the baseline: 109 orders
+ * assigned against the recorded 110, and 435 baseline fields wrong in total. This is the
+ * only cause of that 109. Swapping libm for `java.lang.Math` leaves seed 1 bit-identical
+ * and breaks other seeds instead; see [Libm]. The conversion is load-bearing.
  *
  * Every boundary that accepts a wall-clock instant — the gRPC layer, tests, any future
  * caller — converts here rather than open-coding the offset, so there is one definition
