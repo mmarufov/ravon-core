@@ -131,6 +131,16 @@ jobs:
       - name: Schema drift check
         run: python3 scripts/schema_drift.py
 
+      - name: Drift tool self-test
+        run: python3 scripts/schema_drift.py --self-test
+
+      # The order lifecycle is declared in Swift (OrderLifecycle.swift) and seeded into
+      # `order_transitions`, where a trigger enforces it. Two copies of a state machine
+      # drift, and that drift is the documented origin of the bug ADR 0001 was written
+      # about. This compares them edge for edge, guards included.
+      - name: Order lifecycle parity (Swift ↔ SQL)
+        run: python3 scripts/lifecycle_parity.py
+
   ledger-invariants:
     name: Ledger invariants (PostgreSQL 16)
     runs-on: ubuntu-latest
@@ -229,6 +239,86 @@ jobs:
 
       - name: Report drift check
         run: python scripts/ml_report_drift.py
+
+  db-invariants:
+    name: DB invariants (PostgreSQL 17)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ravon
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # The sixth gate. The other five assert nothing about grants, policies,
+      # constraints or generated columns — which is why nine findings across two
+      # security reports produced exactly one migration, and why the second report's
+      # `"critical": 0` was a false negative rather than a fix record (it ran a month
+      # before the only migration that ever addressed a CRITICAL).
+      #
+      # The lesson, as machinery: a scanner's totals block is never evidence of a fix.
+      # Only an assertion that fails the build is.
+      - name: Apply schema to a fresh database
+        env:
+          PGPASSWORD: ravon
+        run: |
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5434 -U postgres -d postgres \
+            -c 'CREATE DATABASE ravon'
+          ./db/schema/apply.sh -h 127.0.0.1 -p 5434 -U postgres -d ravon --local
+
+      # Each assertion is mapped to a rule in docs/research/security-by-construction.md:
+      # no client write grant on transactional tables, no UPDATE(role) on profiles, no
+      # anon-executable SECURITY DEFINER function, no RLS-bypassing view, money as a
+      # generated column, sweeps not client-callable, every bucket size- and MIME-capped.
+      - name: Assert security and lifecycle invariants
+        env:
+          PGPASSWORD: ravon
+        run: |
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5434 -U postgres -d ravon \
+            -f db/schema/invariants.sql
+
+      # Seeding is itself a regression test for the privilege-escalation CRITICAL: the
+      # seeded consumer's signup metadata carries {"role":"merchant"} — the exploit
+      # payload verbatim — and seed.sql raises if the resulting profile is not
+      # 'consumer'.
+      - name: Seed and walk an order from create_order to delivered
+        env:
+          PGPASSWORD: ravon
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5434 -U postgres -d ravon \
+            -f db/schema/seed.sql
+          # ON_ERROR_STOP=0: the walk deliberately provokes refusals (a consumer
+          # zeroing a total, a merchant PATCHing status directly, three wrong pickup
+          # codes), so psql's exit code is not the signal. The assertion below is.
+          psql -h 127.0.0.1 -p 5434 -U postgres -d ravon \
+            -f db/schema/walk.sql > /tmp/walk.log 2>&1 || true
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5434 -U postgres -d ravon -t -A -c "
+            DO \$\$
+            DECLARE n int; h int;
+            BEGIN
+              SELECT count(*) INTO n FROM orders WHERE status = 'delivered';
+              IF n < 1 THEN
+                RAISE EXCEPTION 'walk failed: no order reached delivered';
+              END IF;
+              SELECT count(*) INTO h FROM order_status_history;
+              IF h < 10 THEN
+                RAISE EXCEPTION 'walk failed: audit trail has % rows, expected >= 10', h;
+              END IF;
+              RAISE NOTICE 'walk OK: % delivered, % history rows', n, h;
+            END \$\$;"
+
+      - name: Walk log
+        if: always()
+        run: cat /tmp/walk.log || true
 
   secret-scan:
     name: Secret scan
