@@ -398,8 +398,10 @@ saturates at **62.5 min** of courier idleness. Once both are saturated the pair 
 ever be inside an 8 km radius (26.67 min). **The credits can therefore dominate geometry
 entirely.**
 
-`distanceOnly` is declared for use as the experiment control (`Dispatcher.swift:91-95`) and
-is referenced **nowhere else in `Sources/` or `Tests/`**. I ran it: seed 42, 12 couriers,
+`distanceOnly` is declared for use as the experiment control (`Dispatcher.swift:91-95` at
+`38f29c9`; the Swift engine was deleted in #12, and the Kotlin port declares it as
+`DispatchCostModel.DISTANCE_ONLY` at `services/dispatch/src/main/kotlin/dev/ravon/dispatch/Dispatcher.kt:114`)
+and is referenced **nowhere else in `Sources/` or `Tests/`**, nor anywhere else in `services/`. I ran it: seed 42, 12 couriers,
 `optimal-batch` assigns **157** with `distanceOnly` vs **162** with credits; gini **0.026**
 vs **0.063**; greedy is **115 either way** (its per-order argmin is unaffected by the
 order-age credit, which is constant across couriers for a given order). **[measured]** So
