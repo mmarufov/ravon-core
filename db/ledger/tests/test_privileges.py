@@ -22,6 +22,7 @@ SERVICE_FUNCTIONS = [
     "ledger_open_account",
     "ledger_payout_begin",
     "ledger_payout_mark_submitted",
+    "ledger_payout_mark_unknown",
     "ledger_payout_post",
     "ledger_payout_fail",
     "ledger_payout_resume",

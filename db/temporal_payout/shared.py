@@ -19,6 +19,9 @@ TASK_QUEUE = os.environ.get("PAYOUT_TASK_QUEUE", "payout-saga")
 ACTIVITY_TIMEOUT = timedelta(seconds=float(os.environ.get("PAYOUT_ACTIVITY_TIMEOUT_S", "3")))
 WORKFLOW_TASK_TIMEOUT = timedelta(seconds=2)
 
+# How often the workflow re-asks the provider about a payout it holds as pending.
+PENDING_POLL = timedelta(seconds=float(os.environ.get("PAYOUT_PENDING_POLL_S", "0.5")))
+
 
 @dataclass(frozen=True)
 class PayoutRequest:
@@ -34,6 +37,20 @@ class ProviderCall:
     request_id: str
     amount_minor: int
     currency: str
+    payout_id: str = ""         # so a timeout can mark the ledger row 'unknown'
+
+
+@dataclass(frozen=True)
+class StatusCall:
+    request_id: str
+
+
+@dataclass(frozen=True)
+class ProviderAnswer:
+    """What the provider said, directly or, after a timeout, via status()."""
+    provider_ref: str | None
+    status: str                 # 'paid' | 'pending' | 'failed'
+    failure_code: str | None    # 'declined' | 'returned' when failed
 
 
 @dataclass(frozen=True)
@@ -53,6 +70,7 @@ class PostCall:
 class FailCall:
     request_id: str
     payout_id: str
+    verdict: str                # the provider's: 'declined' | 'not_found' | 'returned'
     reason: str
 
 

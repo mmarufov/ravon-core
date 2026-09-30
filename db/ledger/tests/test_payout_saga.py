@@ -85,8 +85,9 @@ def test_payout_survives_a_crash_at_every_step_boundary(
 
     if crash_point == "after_begin":
         # Recovery asks the provider "did you ever see this?" and is told no.
-        # Nothing was ever posted, so the payout just fails.
-        assert ledger.payout_resume(payout_id, None) == "failed"
+        # Nothing was ever posted, so the payout just fails, on that verdict.
+        # Without one, resume refuses: db/temporal_payout/tests/test_ambiguous_timeout.py.
+        assert ledger.payout_resume(payout_id, None, "not_found") == "failed"
         assert _payout_transactions(ledger, payout_id) == []
         assert ledger.natural_balance(payable) == FUNDING
         return
@@ -193,7 +194,7 @@ def test_payout_failure_before_posting_has_no_ledger_effect(ledger: Ledger):
     payout_id = ledger.payout_begin(f"r:{uuid4()}", payable, chart.clearing, AMOUNT, CURRENCY)
     ledger.payout_mark_submitted(payout_id, "ref")
 
-    assert ledger.payout_fail(payout_id, "provider declined") == "failed"
+    assert ledger.payout_fail(payout_id, "declined", "provider declined") == "failed"
 
     assert ledger.scalar("SELECT count(*) FROM ledger_entries") == 2  # only the funding
     assert ledger.natural_balance(payable) == FUNDING
@@ -209,7 +210,7 @@ def test_payout_reversal_after_posting_is_a_reversing_entry(ledger: Ledger):
     posted = ledger.payout_post(payout_id)
     assert ledger.natural_balance(payable) == FUNDING - AMOUNT
 
-    assert ledger.payout_fail(payout_id, "bank returned it") == "failed"
+    assert ledger.payout_fail(payout_id, "returned", "bank returned it") == "failed"
 
     assert ledger.natural_balance(payable) == FUNDING, "the courier is whole again"
     reversal = ledger.scalar(
@@ -229,7 +230,7 @@ def test_failing_a_payout_twice_reverses_it_once(ledger: Ledger):
     ledger.payout_post(payout_id)
 
     for _ in range(4):
-        assert ledger.payout_fail(payout_id, "bank returned it") == "failed"
+        assert ledger.payout_fail(payout_id, "returned", "bank returned it") == "failed"
 
     assert ledger.natural_balance(payable) == FUNDING
     assert ledger.scalar(

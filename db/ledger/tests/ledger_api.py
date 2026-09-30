@@ -204,12 +204,20 @@ class Ledger:
             "SELECT transaction_id, replayed FROM ledger_payout_post(%s::uuid)", (payout_id,))
         return PostResult(row[0], row[1])
 
-    def payout_fail(self, payout_id: UUID, reason: str) -> str:
-        return self._call_one("SELECT ledger_payout_fail(%s::uuid, %s)", (payout_id, reason))
+    def payout_mark_unknown(self, payout_id: UUID) -> str:
+        return self._call_one("SELECT ledger_payout_mark_unknown(%s::uuid)", (payout_id,))
 
-    def payout_resume(self, payout_id: UUID, provider_ref: str | None = None) -> str:
+    def payout_fail(self, payout_id: UUID, verdict: str | None, reason: str | None = None) -> str:
+        """verdict is the provider's answer: 'declined', 'not_found' or 'returned'."""
         return self._call_one(
-            "SELECT ledger_payout_resume(%s::uuid, %s)", (payout_id, provider_ref))
+            "SELECT ledger_payout_fail(%s::uuid, %s::ledger_payout_verdict, %s)",
+            (payout_id, verdict, reason))
+
+    def payout_resume(self, payout_id: UUID, provider_ref: str | None = None,
+                      verdict: str | None = None) -> str:
+        return self._call_one(
+            "SELECT ledger_payout_resume(%s::uuid, %s, %s::ledger_payout_verdict)",
+            (payout_id, provider_ref, verdict))
 
     def payout_state(self, payout_id: UUID) -> str:
         return self.scalar("SELECT state FROM ledger_payouts WHERE id = %s", (payout_id,))

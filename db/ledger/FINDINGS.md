@@ -92,6 +92,9 @@ orders faster than the other rules could operate on them (212 authorizes against
 3,415 invariant checks · 1,019 postings · 476 rejected operations · every rule fired
 ```
 
+(Those were the counts for the source at the time. A later, unrelated edit to
+the test re-rolled them; see §14.)
+
 The lasting lesson is in `WORK` and the floor assertions at the bottom of
 `test_stateful.py`. **A stateful property suite that degenerates into no-op runs
 still passes, and passing for that reason is worse than failing**, because it
@@ -251,3 +254,29 @@ both.
 Nothing in the schema needs anything newer than PostgreSQL 14 (`pg_terminate_backend`
 with a timeout, used only by the crash tests, is the highest floor;
 `gen_random_uuid()` needs 13, transition tables need 10).
+
+## 14. A derandomised Hypothesis run is reproducible only for identical test code
+
+`derandomize=True` makes a run repeatable, and it is easy to read that as "these
+counts are a property of the ledger". They are not. Hypothesis derives the seed
+from the test's code, and changing one string literal in a rule body, with no
+change in behaviour, re-rolls every draw: `"provider declined"` to
+`"provider declined!"` in `payout_failure_before_posting` took the run from
+3,415 / 1,019 / 476 (invariant checks / postings / rejections) to
+3,767 / 994 / 407. Adding a comment changed nothing, so it is the code, not the
+text.
+
+It mattered when `ledger_payout_fail` gained a required verdict. The two call
+sites in `test_stateful.py` had to change, and the run became 3,854 / 1,019 /
+205 over 191 examples. That the posting count came out at 1,019 again is a
+coincidence. The re-rolled run is worse in one way the floors do not catch:
+`chargeback_reversal` fired 139 times and succeeded 0 times (the old run posted
+3). The floors assert that every rule is *attempted*, not that every event type
+is *posted*.
+
+So the counts in README.md are quoted for a specific source, and any change to
+`test_stateful.py` is expected to move them. A floor on successful postings per
+event type would catch the coverage loss; it is not added here, because with
+this seed it would fail on `chargeback_reversal`, and choosing a seed that makes
+it pass would be tuning the test to the number.
+

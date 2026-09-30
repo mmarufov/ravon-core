@@ -433,7 +433,7 @@ class LedgerMachine(RuleBasedStateMachine):
     def payout_reversal(self, payout: Payout) -> None:
         WORK["rule:payout_reversal"] += 1
         self.fired["payout_reversal"] += 1
-        self.ledger.payout_fail(payout.payout_id, "bank returned it")
+        self.ledger.payout_fail(payout.payout_id, "returned", "bank returned it")
         if payout.posted:
             self._apply([debit(self.chart.clearing, payout.amount, CURRENCY),
                          credit(payout.payee, payout.amount, CURRENCY)])
@@ -448,7 +448,7 @@ class LedgerMachine(RuleBasedStateMachine):
         payout_id = self.ledger.payout_begin(
             f"payout:{uuid4()}", courier.account_id, self.chart.clearing, amount, CURRENCY)
         self.ledger.payout_mark_submitted(payout_id, f"ref:{payout_id}")
-        self.ledger.payout_fail(payout_id, "provider declined")
+        self.ledger.payout_fail(payout_id, "declined", "provider declined")
         return multiple()
 
     # =====================================================================

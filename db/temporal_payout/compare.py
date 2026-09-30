@@ -89,7 +89,9 @@ def mechanisms(a: dict[str, str]) -> dict[str, tuple[str, str]]:
             f"{rb}; the caller calls begin again ({a['test_rebegin']}). No retry loop exists outside the test",
             f"{rb}; activity attempt 1 raised, RetryPolicy ran attempt 2 ({a['wf_retry']})"),
         "after_begin": (
-            f"resume with no provider ref fails the payout ({a['resume_fail']}); outcome FAILED, 0 effects",
+            f"resume with the provider's not_found verdict fails the payout ({a['resume_fail']}); "
+            "outcome FAILED, 0 effects. Without a verdict resume refuses (PAYOUT_VERDICT_REQUIRED); "
+            "resolver.py asks and resubmits instead",
             "start-to-close timeout on the provider activity, attempt 2 on the restarted worker; "
             "begin not re-run (history replay); outcome POSTED, 1 effect"),
         "after_provider_call": (

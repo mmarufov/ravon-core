@@ -93,7 +93,17 @@ CREATE TYPE ledger_account_kind AS ENUM (
   'order_receivable'    -- asset:     authorized but not yet captured
 );
 
-CREATE TYPE ledger_payout_state AS ENUM ('pending', 'submitted', 'posted', 'failed');
+-- 'unknown': the provider call timed out, so the platform does not know whether
+-- money moved. Only a provider answer moves it on: a ref (it paid, or holds it
+-- pending) or a verdict (it did not). Nothing moves it to 'failed' on a guess.
+CREATE TYPE ledger_payout_state AS ENUM ('pending', 'unknown', 'submitted', 'posted', 'failed');
+
+-- Why a payout failed, as the provider said it. There is no 'timeout' and no
+-- 'unknown' here on purpose: a timeout is not an answer.
+--   declined   the provider refused it, or it failed asynchronously; no money moved
+--   not_found  the provider has no record of the request, after it can no longer land
+--   returned   it paid, and the money came back (bank return)
+CREATE TYPE ledger_payout_verdict AS ENUM ('declined', 'not_found', 'returned');
 
 -- Return type of ledger_post(). `replayed` distinguishes "we wrote it now" from
 -- "this idempotency key already existed and we returned the original".
@@ -215,11 +225,16 @@ CREATE TABLE ledger_payouts (
   currency              char(3) NOT NULL CHECK (currency ~ '^[A-Z]{3}$'),
   state                 ledger_payout_state NOT NULL DEFAULT 'pending',
   provider_ref          text,
+  failure_verdict       ledger_payout_verdict,
   failure_reason        text,
   ledger_transaction_id uuid REFERENCES ledger_transactions(id),
   reversal_transaction_id uuid REFERENCES ledger_transactions(id),
   created_at            timestamptz NOT NULL DEFAULT now(),
-  updated_at            timestamptz NOT NULL DEFAULT now()
+  updated_at            timestamptz NOT NULL DEFAULT now(),
+  -- A failed payout carries the provider's verdict, structurally. Not a
+  -- convention in ledger_payout_fail: the row cannot exist without it.
+  CONSTRAINT ledger_payouts_failed_has_verdict
+    CHECK ((state = 'failed') = (failure_verdict IS NOT NULL))
 );
 
 -- ============================================================================
@@ -859,6 +874,32 @@ BEGIN
   RETURN 'submitted'::ledger_payout_state;
 END$$;
 
+-- The provider call timed out. Record that the platform no longer knows, so a
+-- crash from here on leaves a row that says so, and so post and fail both need
+-- an answer from the provider first. Idempotent; never moves a payout backwards.
+CREATE OR REPLACE FUNCTION ledger_payout_mark_unknown(p_payout_id uuid)
+RETURNS ledger_payout_state
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_state ledger_payout_state;
+BEGIN
+  SELECT state INTO v_state FROM ledger_payouts WHERE id = p_payout_id FOR UPDATE;
+  IF NOT FOUND THEN
+    PERFORM ledger_raise('PAYOUT_NOT_FOUND', 404,
+                         jsonb_build_object('payout_id', p_payout_id));
+  END IF;
+
+  IF v_state <> 'pending' THEN
+    RETURN v_state;   -- unknown already, or something newer is known
+  END IF;
+
+  UPDATE ledger_payouts SET state = 'unknown', updated_at = now() WHERE id = p_payout_id;
+  RETURN 'unknown'::ledger_payout_state;
+END$$;
+
 -- Step 4. Post the money movement. Idempotency key is derived from the payout
 -- id, so however many times this runs, at most one ledger transaction exists.
 CREATE OR REPLACE FUNCTION ledger_payout_post(p_payout_id uuid)
@@ -877,7 +918,7 @@ BEGIN
                          jsonb_build_object('payout_id', p_payout_id));
   END IF;
 
-  IF p.state = 'pending' THEN
+  IF p.state IN ('pending', 'unknown') THEN
     PERFORM ledger_raise('PAYOUT_NOT_SUBMITTED', 409, jsonb_build_object(
       'payout_id', p_payout_id,
       'state',     p.state,
@@ -908,12 +949,17 @@ BEGIN
   RETURN v_result;
 END$$;
 
--- The provider rejected or reversed the payout.
---   * not yet posted -> mark failed, no ledger effect (nothing was ever recorded)
---   * already posted -> post a REVERSING transaction, never touch the original
+-- The provider rejected or reversed the payout, and said so.
+--   * no verdict                     -> PAYOUT_VERDICT_REQUIRED: a timeout is not a verdict
+--   * not yet posted, any verdict    -> mark failed, no ledger effect (nothing was recorded)
+--     (except submitted + not_found: the provider gave us a ref, so it has a record)
+--   * posted + returned              -> post a REVERSING transaction, never touch the original
+--   * posted + declined / not_found  -> PAYOUT_VERDICT_CONFLICT: it paid; a later
+--     "declined" is about some other request, not this money
 CREATE OR REPLACE FUNCTION ledger_payout_fail(
   p_payout_id uuid,
-  p_reason    text
+  p_verdict   ledger_payout_verdict,
+  p_reason    text DEFAULT NULL
 ) RETURNS ledger_payout_state
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -923,6 +969,12 @@ DECLARE
   p ledger_payouts%ROWTYPE;
   v_result ledger_post_result;
 BEGIN
+  IF p_verdict IS NULL THEN
+    PERFORM ledger_raise('PAYOUT_VERDICT_REQUIRED', 422, jsonb_build_object(
+      'payout_id', p_payout_id,
+      'hint',      'ask the provider for status; fail only on declined, not_found or returned'));
+  END IF;
+
   SELECT * INTO p FROM ledger_payouts WHERE id = p_payout_id FOR UPDATE;
   IF NOT FOUND THEN
     PERFORM ledger_raise('PAYOUT_NOT_FOUND', 404,
@@ -931,6 +983,12 @@ BEGIN
 
   IF p.state = 'failed' THEN
     RETURN 'failed'::ledger_payout_state;   -- idempotent replay
+  END IF;
+
+  IF (p.state = 'posted' AND p_verdict <> 'returned')
+     OR (p.state = 'submitted' AND p_verdict = 'not_found') THEN
+    PERFORM ledger_raise('PAYOUT_VERDICT_CONFLICT', 409, jsonb_build_object(
+      'payout_id', p_payout_id, 'state', p.state, 'verdict', p_verdict));
   END IF;
 
   IF p.state = 'posted' THEN
@@ -946,25 +1004,33 @@ BEGIN
                            'amount_minor', p.amount_minor, 'currency', p.currency)));
 
     UPDATE ledger_payouts
-    SET state = 'failed', failure_reason = p_reason,
+    SET state = 'failed', failure_verdict = p_verdict, failure_reason = p_reason,
         reversal_transaction_id = v_result.transaction_id, updated_at = now()
     WHERE id = p_payout_id;
   ELSE
     UPDATE ledger_payouts
-    SET state = 'failed', failure_reason = p_reason, updated_at = now()
+    SET state = 'failed', failure_verdict = p_verdict, failure_reason = p_reason,
+        updated_at = now()
     WHERE id = p_payout_id;
   END IF;
 
   RETURN 'failed'::ledger_payout_state;
 END$$;
 
--- The resume path. Given a payout in any state, drive it to a terminal one.
--- p_provider_ref is what the recovery job learned by asking the provider "did
--- you ever see this request?"; NULL means the provider never got it, so the
--- payout failed without a ledger effect.
+-- The resume path. Given a payout in any state, drive it to a terminal one,
+-- using only what the recovery job learned by asking the provider:
+--   p_provider_ref  the provider has it (paid, or holding it pending)
+--   p_verdict       the provider says it did not happen, or came back
+-- With neither, a submitted payout can still be posted (the provider already
+-- gave a ref), but a pending or unknown one is refused with
+-- PAYOUT_VERDICT_REQUIRED. It used to be failed here, on the assumption that
+-- "no ref" meant "the provider never got it". A provider that paid and then
+-- timed out breaks that assumption, and the payout would be marked failed while
+-- the money was gone.
 CREATE OR REPLACE FUNCTION ledger_payout_resume(
   p_payout_id    uuid,
-  p_provider_ref text DEFAULT NULL
+  p_provider_ref text DEFAULT NULL,
+  p_verdict      ledger_payout_verdict DEFAULT NULL
 ) RETURNS ledger_payout_state
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -983,9 +1049,16 @@ BEGIN
     RETURN v_state;
   END IF;
 
-  IF v_state = 'pending' THEN
+  IF p_verdict IS NOT NULL THEN
+    RETURN ledger_payout_fail(p_payout_id, p_verdict, 'resume: provider verdict');
+  END IF;
+
+  IF v_state IN ('pending', 'unknown') THEN
     IF p_provider_ref IS NULL THEN
-      RETURN ledger_payout_fail(p_payout_id, 'provider never received the request');
+      PERFORM ledger_raise('PAYOUT_VERDICT_REQUIRED', 422, jsonb_build_object(
+        'payout_id', p_payout_id,
+        'state',     v_state,
+        'hint',      'ask the provider for status and pass its ref or its verdict'));
     END IF;
     PERFORM ledger_payout_mark_submitted(p_payout_id, p_provider_ref);
   END IF;
@@ -1040,9 +1113,10 @@ REVOKE EXECUTE ON FUNCTION
   ledger_deferred_check_count(),
   ledger_payout_begin(text, uuid, uuid, bigint, char),
   ledger_payout_mark_submitted(uuid, text),
+  ledger_payout_mark_unknown(uuid),
   ledger_payout_post(uuid),
-  ledger_payout_fail(uuid, text),
-  ledger_payout_resume(uuid, text),
+  ledger_payout_fail(uuid, ledger_payout_verdict, text),
+  ledger_payout_resume(uuid, text, ledger_payout_verdict),
   ledger_verify_balances(),
   ledger_split_minor(bigint, int[]),
   ledger_raise(text, int, jsonb)
@@ -1056,9 +1130,10 @@ GRANT EXECUTE ON FUNCTION
   ledger_open_account(ledger_account_kind, uuid, char, boolean),
   ledger_payout_begin(text, uuid, uuid, bigint, char),
   ledger_payout_mark_submitted(uuid, text),
+  ledger_payout_mark_unknown(uuid),
   ledger_payout_post(uuid),
-  ledger_payout_fail(uuid, text),
-  ledger_payout_resume(uuid, text),
+  ledger_payout_fail(uuid, ledger_payout_verdict, text),
+  ledger_payout_resume(uuid, text, ledger_payout_verdict),
   ledger_verify_balances(),
   ledger_split_minor(bigint, int[]),
   ledger_normal_sign(ledger_account_kind),
