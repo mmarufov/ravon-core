@@ -108,3 +108,27 @@ points: hand-built 0.73 s, Temporal 16.41 s.
 
 These two steps are the `temporal-payout` CI job, about 115 s locally
 (43 s + 72 s).
+
+## Follow-ups on the same day
+
+**CI on 8ebc63f** (run 36767085492): all 10 jobs green, including
+`LibmDisagreementTest` on `macos-15` and the new `temporal-payout` job. That
+job's two test steps took 46 s (pytest) and 82 s (`compare.py --repeat 1`),
+3 min 1 s for the whole job including container start. To bring the matrix step
+down, CI now passes `--timeout-sensitivity 0`, which skips the extra Temporal
+run at a 1 s activity timeout. Locally that made `compare.py --repeat 1` 47 s
+instead of 72 s (exit 0, same matrix, 0 failures).
+
+**A bug in `pg_killcount` found by a stale database.** After a run aborted by
+macOS ephemeral-port exhaustion ("Can't assign requested address", a local TCP
+problem, not a test failure), the next run reported `7 of 85 tests killed a
+backend; 0 kills in total`. The aborted run had left `ravon_ledger_test` behind
+holding 18 kills. The counter read "before" ahead of fixture setup, and the
+session fixture then dropped and recreated that database, resetting its
+statistics row, so the first test came out at -17. The fix reads "before" after
+fixture setup. `test_a_stale_database_from_an_earlier_run_does_not_leak_into_the_count`
+pre-seeds 5 kills into the scratch database and recreates it in a session
+fixture. With the fix: 4 passed. With the old ordering: 1 failed, 3 passed.
+Local runs from here on use the Unix socket
+(`postgresql://postgres@/postgres?host=/tmp/pgstripe&port=5455`) to avoid the
+port exhaustion.

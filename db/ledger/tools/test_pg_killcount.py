@@ -57,6 +57,22 @@ def scratch_db():
         c.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(SCRATCH_DB)))
 
 
+RECREATING_CONFTEST = f'''
+import psycopg
+import pytest
+from psycopg import sql
+
+@pytest.fixture(scope="session", autouse=True)
+def fresh_database():
+    # What tests/conftest.py's ledger_db does: drop and recreate the database
+    # in the first test's setup, which resets its statistics row.
+    with psycopg.connect({ADMIN_DSN!r}, autocommit=True) as c:
+        c.execute(sql.SQL("DROP DATABASE IF EXISTS {{}} WITH (FORCE)").format(sql.Identifier({SCRATCH_DB!r})))
+        c.execute(sql.SQL("CREATE DATABASE {{}}").format(sql.Identifier({SCRATCH_DB!r})))
+    yield
+'''
+
+
 def _run(pytester: pytest.Pytester, monkeypatch, *args: str) -> pytest.RunResult:
     monkeypatch.setenv("LEDGER_TEST_DB", SCRATCH_DB)
     monkeypatch.setenv("PYTHONPATH", str(pathlib.Path(__file__).resolve().parent))
@@ -93,3 +109,21 @@ def test_a_wrong_expectation_fails_the_session(pytester, monkeypatch, scratch_db
     result.assert_outcomes(passed=3)
     assert result.ret == pytest.ExitCode.TESTS_FAILED
     result.stdout.fnmatch_lines(["pg-killcount MISMATCH: expected 2 tests / 4 kills, got 2 / 3"])
+
+
+def test_a_stale_database_from_an_earlier_run_does_not_leak_into_the_count(
+        pytester, monkeypatch, scratch_db):
+    # Regression: an aborted run leaves the database behind with kills already
+    # counted. The suite's session fixture recreates it during the first test's
+    # setup, so a "before" read taken ahead of fixture setup saw the stale count
+    # and the first test came out negative.
+    with psycopg.connect(ADMIN_DSN, autocommit=True) as admin:
+        for _ in range(5):
+            victim = psycopg.connect(scratch_db)
+            admin.execute("SELECT pg_terminate_backend(%s, 5000)", (victim.info.backend_pid,))
+        assert sessions_killed(admin, SCRATCH_DB) >= 5
+    pytester.makeconftest(RECREATING_CONFTEST)
+    result = _run(pytester, monkeypatch, "--expect-kills", "2:3")
+    result.assert_outcomes(passed=3)
+    assert result.ret == 0, result.stdout.str()
+

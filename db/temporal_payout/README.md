@@ -24,7 +24,8 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 Everything runs against a local `temporal server start-dev`. Nothing here has been run
 against a production Temporal cluster. CI does the same on every push: the
 `temporal-payout` job installs Temporal CLI 1.9.1, runs this pytest suite, and runs
-`compare.py --repeat 1`, which exits non-zero if any row of the matrix fails.
+`compare.py --repeat 1 --timeout-sensitivity 0`, which exits non-zero if any row of
+the matrix fails.
 
 ## What is in here
 
