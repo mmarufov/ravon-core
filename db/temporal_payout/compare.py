@@ -455,6 +455,8 @@ def main() -> None:
     print(text)
     if args.out:
         pathlib.Path(args.out).write_text(text)
+    if not stable:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

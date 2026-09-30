@@ -192,13 +192,82 @@ jobs:
       # 100 examples x 40 steps keeps this job well under a minute on a GitHub
       # runner. Raising it explores more interleavings at a linear cost in
       # wall-clock; see db/ledger/README.md.
+      #
+      # -p pg_killcount counts, from pg_stat_database.sessions_killed, how many
+      # backends each test really killed. --expect-kills 7:18 fails the job if
+      # that drifts from what db/ledger/README.md says.
       - name: Ledger invariants and crash injection
         working-directory: db/ledger
         env:
           LEDGER_DSN: postgresql://postgres:ledger@127.0.0.1:5433/postgres
           LEDGER_MAX_EXAMPLES: "100"
           HYPOTHESIS_PROFILE: ci
-        run: python -m pytest tests -p no:cacheprovider
+          PYTHONPATH: tools
+        run: python -m pytest tests -p no:cacheprovider -p pg_killcount --kill-report --expect-kills 7:18
+
+      # The counter's own tests, including the negative controls: a normal
+      # disconnect counts 0, and a wrong --expect-kills fails the session.
+      - name: Kill counter self-test
+        working-directory: db/ledger
+        env:
+          LEDGER_DSN: postgresql://postgres:ledger@127.0.0.1:5433/postgres
+          PYTHONPATH: tools
+        run: python -m pytest tools -p pytester -p no:cacheprovider
+
+  temporal-payout:
+    name: Payout saga on Temporal (PostgreSQL 16 + Temporal dev server)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ledger
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      LEDGER_DSN: postgresql://postgres:ledger@127.0.0.1:5433/postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            db/ledger/tests/requirements.txt
+            db/temporal_payout/requirements.txt
+
+      - name: Install test dependencies
+        run: python -m pip install -r db/temporal_payout/requirements.txt
+
+      # The same CLI the local runs used (1.9.1), pinned so a new dev server
+      # cannot change crash behaviour under the matrix without a commit.
+      - name: Install the Temporal CLI
+        run: |
+          curl -sSfL "https://temporal.download/cli/archive/v1.9.1?platform=linux&arch=amd64" \
+            -o temporal.tar.gz
+          mkdir -p "$HOME/.temporal-cli"
+          tar -xzf temporal.tar.gz -C "$HOME/.temporal-cli"
+          echo "$HOME/.temporal-cli" >> "$GITHUB_PATH"
+          "$HOME/.temporal-cli/temporal" --version
+
+      # Starts its own dev server on :7239. Workers are SIGKILLed and SIGSTOPped
+      # mid-activity; every row must still end in exactly one ledger effect.
+      - name: Temporal payout suite
+        working-directory: db/temporal_payout
+        run: python -m pytest
+
+      # A smoke run of the side-by-side crash matrix: both implementations, one
+      # repeat. compare.py exits non-zero if any row fails.
+      - name: Crash matrix, hand-built vs Temporal
+        working-directory: db/temporal_payout
+        run: python compare.py --repeat 1
 
   ml-evaluation:
     name: ML evaluation (Python)
