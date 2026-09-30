@@ -277,3 +277,49 @@ DROP TRIGGER IF EXISTS restaurants_set_owner ON public.restaurants;
 CREATE TRIGGER restaurants_set_owner
   BEFORE INSERT ON public.restaurants
   FOR EACH ROW EXECUTE FUNCTION public.restaurants_set_owner();
+
+-- ===========================================================================
+-- Every stock edit that is not an order movement is an `adjust` row.
+--
+-- Merchants set stock_count directly (menu_items_write_own, 11_rls.sql), and a
+-- restock is legitimate. Logging it is what lets the conservation check tell a
+-- restock from a leak: stock_count must always equal the sum of its movements.
+--
+-- Order movements (reserve, release) write their own rows and set the
+-- transaction-local `ravon.inventory_op` so this trigger does not log them a
+-- second time. The same pattern as ravon_set_actor: a GUC no client can reach
+-- through PostgREST, set only inside SECURITY DEFINER functions. If anything
+-- else sets it and moves stock, ravon_inventory_violations() reports the gap.
+--
+-- NULL means "not tracked" and counts as 0, so switching tracking off or on is
+-- an adjustment of the whole balance and the ledger stays exact.
+-- ===========================================================================
+CREATE OR REPLACE FUNCTION public.menu_items_log_stock_adjustment()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_delta int;
+BEGIN
+  IF current_setting('ravon.inventory_op', true) = 'order' THEN
+    RETURN NULL;
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    v_delta := COALESCE(NEW.stock_count, 0);
+  ELSE
+    v_delta := COALESCE(NEW.stock_count, 0) - COALESCE(OLD.stock_count, 0);
+  END IF;
+  IF v_delta <> 0 THEN
+    INSERT INTO public.inventory_movements(menu_item_id, order_id, kind, quantity)
+    VALUES (NEW.id, NULL, 'adjust', v_delta);
+  END IF;
+  RETURN NULL;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS menu_items_log_stock_adjustment ON public.menu_items;
+CREATE TRIGGER menu_items_log_stock_adjustment
+  AFTER INSERT OR UPDATE OF stock_count ON public.menu_items
+  FOR EACH ROW EXECUTE FUNCTION public.menu_items_log_stock_adjustment();

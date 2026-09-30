@@ -29,7 +29,8 @@ BEGIN
     INTO v_bad
   FROM (VALUES ('orders'),('order_items'),('order_status_history'),
                ('courier_earnings'),('courier_cancellation_log'),
-               ('order_transitions')) AS t(tbl)
+               ('order_transitions'),('inventory_movements'),
+               ('kitchen_slots'),('kitchen_slot_holds')) AS t(tbl)
   CROSS JOIN (VALUES ('anon'),('authenticated')) AS r(rolname)
   CROSS JOIN (VALUES ('INSERT'),('UPDATE'),('DELETE')) AS p(priv)
   WHERE has_table_privilege(r.rolname, 'public.' || t.tbl, p.priv);
@@ -338,10 +339,43 @@ BEGIN
   FROM pg_policies
   WHERE schemaname = 'public'
     AND tablename IN ('orders','order_items','order_status_history',
-                      'courier_earnings','courier_cancellation_log')
+                      'courier_earnings','courier_cancellation_log',
+                      'inventory_movements','kitchen_slots','kitchen_slot_holds')
     AND cmd <> 'SELECT';
   IF v_bad IS NOT NULL THEN
     RAISE EXCEPTION 'R2 violated — non-SELECT policy on a transactional table: %', v_bad;
+  END IF;
+
+  -- =========================================================================
+  -- STOCK: conservation, and the two structural guarantees behind it.
+  --
+  -- The 31 checks above are about the catalog: grants, policies, generated
+  -- columns, the transition table. They all passed at 65ad66c while scheduled
+  -- pre-orders let 60 orders go live for 40 portions, because nothing here
+  -- checked behaviour and no test in the repo touched stock. A catalog
+  -- invariant is not a behavioural one; these are the behavioural ones, and
+  -- db/rush plus db/schema/tests exercise them under load.
+  -- =========================================================================
+  SELECT string_agg(format('%s: %s', check_name, detail), '; ') INTO v_bad
+  FROM public.ravon_inventory_violations();
+  IF v_bad IS NOT NULL THEN
+    RAISE EXCEPTION 'STOCK: conservation violated: %', v_bad;
+  END IF;
+
+  -- Returning units twice must be a constraint violation, not a bug to find.
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                 WHERE conname = 'inventory_movements_once' AND contype = 'u') THEN
+    RAISE EXCEPTION 'STOCK: inventory_movements has no UNIQUE (order_id, menu_item_id, kind)';
+  END IF;
+
+  -- The regression, by name. A clamp on stock anywhere in the order paths
+  -- turns an oversell into a silent zero.
+  SELECT string_agg(p.proname, ', ') INTO v_bad
+  FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+  WHERE n.nspname = 'public'
+    AND p.prosrc ~* 'greatest\s*\(\s*0\s*,\s*[a-z_.]*stock_count';
+  IF v_bad IS NOT NULL THEN
+    RAISE EXCEPTION 'STOCK: GREATEST(0, stock_count ...) clamp in: %', v_bad;
   END IF;
 
   RAISE NOTICE 'all invariants hold';

@@ -69,15 +69,54 @@ END;
 $$;
 
 -- ---------------------------------------------------------------------------
--- Return reserved stock when an order dies before it is cooked.
+-- Stock and kitchen-slot reservations: take at checkout, give back at most once.
 --
--- This is a RECONSTRUCTION, not a recovery: `cleanup_cancelled_order` is
--- referenced in the corpus but its definition is gone, so this is what it
--- should have done rather than what it did. Only non-scheduled orders
--- decremented stock in create_order, so only those are restored, and the
--- restore is idempotent per call site (each cancel RPC transitions the status in
--- the same transaction, so it cannot run twice for one order).
+-- At 65ad66c this was one function, ravon_restore_stock, that skipped every
+-- order with `scheduled_for IS NOT NULL` on the theory that scheduled orders
+-- had not decremented at creation. That was true until the activation sweep
+-- decremented them, after which cancelling one never returned its units
+-- (stock 40, 10 activated -> 30, 3 cancelled -> still 30; the order-now control
+-- gave 33). The asymmetry was the bug: the code that took and the code that
+-- gave back were deciding "who holds a unit" from different facts.
+--
+-- Now both sides read the same fact, the `reserve` rows in inventory_movements.
+-- Release gives back exactly what was reserved, for exactly the items that
+-- were reserved, and the UNIQUE (order_id, menu_item_id, kind) key makes a
+-- second release insert nothing, so it restores nothing.
 -- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.ravon_reserve_stock(p_order_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  -- Callers (create_order) already hold FOR UPDATE on every item row, taken in
+  -- menu_item_id order, and have checked stock against the per-item SUM.
+  PERFORM set_config('ravon.inventory_op', 'order', true);
+
+  WITH need AS (
+    SELECT oi.menu_item_id, sum(oi.quantity)::int AS quantity
+    FROM public.order_items oi
+    JOIN public.menu_items mi ON mi.id = oi.menu_item_id
+    WHERE oi.order_id = p_order_id AND mi.stock_count IS NOT NULL
+    GROUP BY oi.menu_item_id
+  ), mv AS (
+    INSERT INTO public.inventory_movements(menu_item_id, order_id, kind, quantity)
+    SELECT menu_item_id, p_order_id, 'reserve', -quantity FROM need
+    RETURNING menu_item_id, quantity
+  )
+  -- No GREATEST(0, ...). If this would go negative the CHECK constraint on
+  -- stock_count aborts the checkout, which is the correct outcome for a bug in
+  -- the caller's check; a clamp would turn it into a silent oversell.
+  UPDATE public.menu_items mi
+  SET stock_count = mi.stock_count + mv.quantity
+  FROM mv WHERE mi.id = mv.menu_item_id;
+
+  PERFORM set_config('ravon.inventory_op', '', true);
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.ravon_restore_stock(p_order_id uuid)
 RETURNS void
 LANGUAGE plpgsql
@@ -85,15 +124,144 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
+  -- Lock the item rows in menu_item_id order, the same order create_order uses,
+  -- so a cancel and a checkout touching the same items cannot deadlock.
+  PERFORM 1 FROM public.menu_items mi
+  WHERE mi.id IN (SELECT menu_item_id FROM public.inventory_movements
+                  WHERE order_id = p_order_id AND kind = 'reserve')
+  ORDER BY mi.id
+  FOR UPDATE;
+
+  PERFORM set_config('ravon.inventory_op', 'order', true);
+
+  WITH mv AS (
+    INSERT INTO public.inventory_movements(menu_item_id, order_id, kind, quantity)
+    SELECT r.menu_item_id, r.order_id, 'release', -r.quantity
+    FROM public.inventory_movements r
+    JOIN public.menu_items mi ON mi.id = r.menu_item_id
+    WHERE r.order_id = p_order_id AND r.kind = 'reserve'
+      -- An item whose tracking was switched off since checkout has nothing to
+      -- return to; the release is skipped rather than written against NULL.
+      AND mi.stock_count IS NOT NULL
+    ON CONFLICT (order_id, menu_item_id, kind) DO NOTHING
+    RETURNING menu_item_id, quantity
+  )
   UPDATE public.menu_items mi
-  SET stock_count = mi.stock_count + oi.quantity
-  FROM public.order_items oi
-  JOIN public.orders o ON o.id = oi.order_id
-  WHERE oi.order_id = p_order_id
-    AND oi.menu_item_id = mi.id
-    AND mi.stock_count IS NOT NULL
-    AND o.scheduled_for IS NULL;
+  SET stock_count = mi.stock_count + mv.quantity
+  FROM mv WHERE mi.id = mv.menu_item_id;
+
+  PERFORM set_config('ravon.inventory_op', '', true);
+
+  -- The kitchen-slot place, if this was a scheduled order. Flipping
+  -- released_at from NULL is the exactly-once gate.
+  WITH h AS (
+    UPDATE public.kitchen_slot_holds
+    SET released_at = now()
+    WHERE order_id = p_order_id AND released_at IS NULL
+    RETURNING restaurant_id, slot_start
+  )
+  UPDATE public.kitchen_slots s
+  SET taken = s.taken - 1
+  FROM h
+  WHERE s.restaurant_id = h.restaurant_id AND s.slot_start = h.slot_start;
 END;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- ravon_inventory_violations: stock conservation, as data.
+--
+-- For every item, `initial + restocks = stock_count + units held by orders`,
+-- which in ledger form is: stock_count equals the sum of its movements, and the
+-- movements agree with the orders they belong to. Returns one row per
+-- violation; an empty result is the pass. invariants.sql asserts it on apply,
+-- CI asserts it after the seeded walk and after every rush run
+-- (db/rush/rush.py), and db/schema/tests shows each check failing on a
+-- deliberately corrupted database.
+--
+-- Not granted to any client role (12_grants.sql revokes it with the rest).
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.ravon_inventory_violations()
+RETURNS TABLE (check_name text, detail text)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  -- 1. The cached balance is the ledger's balance.
+  SELECT 'stock_equals_ledger',
+         format('item %s: stock_count %s, movements sum to %s',
+                mi.id, mi.stock_count, COALESCE(m.total, 0))
+  FROM public.menu_items mi
+  LEFT JOIN (SELECT menu_item_id, sum(quantity) AS total
+             FROM public.inventory_movements GROUP BY 1) m ON m.menu_item_id = mi.id
+  WHERE COALESCE(mi.stock_count, 0) <> COALESCE(m.total, 0)
+
+  UNION ALL
+  -- 2. A release gives back exactly what its reservation took, and nothing
+  --    is released that was never reserved.
+  SELECT 'release_matches_reserve',
+         format('order %s item %s: released %s, reserved %s',
+                rel.order_id, rel.menu_item_id, rel.quantity, res.quantity)
+  FROM public.inventory_movements rel
+  LEFT JOIN public.inventory_movements res
+    ON res.order_id = rel.order_id AND res.menu_item_id = rel.menu_item_id
+   AND res.kind = 'reserve'
+  WHERE rel.kind = 'release'
+    AND (res.id IS NULL OR rel.quantity <> -res.quantity)
+
+  UNION ALL
+  -- 3. A reservation is the order's summed demand for that item.
+  SELECT 'reserve_matches_cart',
+         format('order %s item %s: reserved %s, order_items sum to %s',
+                res.order_id, res.menu_item_id, -res.quantity, COALESCE(oi.total, 0))
+  FROM public.inventory_movements res
+  LEFT JOIN (SELECT order_id, menu_item_id, sum(quantity) AS total
+             FROM public.order_items GROUP BY 1, 2) oi
+    ON oi.order_id = res.order_id AND oi.menu_item_id = res.menu_item_id
+  WHERE res.kind = 'reserve' AND -res.quantity <> COALESCE(oi.total, 0)
+
+  UNION ALL
+  -- 4. Units are only returned by an order that is dead.
+  SELECT 'live_order_released',
+         format('order %s is %s but released item %s', o.id, o.status, rel.menu_item_id)
+  FROM public.inventory_movements rel
+  JOIN public.orders o ON o.id = rel.order_id
+  WHERE rel.kind = 'release'
+    AND o.status NOT IN ('rejected','cancelled','cancelled_by_customer',
+                         'cancelled_by_restaurant','cancelled_by_system',
+                         'cancelled_by_courier')
+
+  UNION ALL
+  -- 5. And every order that died before pickup returned them. After pickup
+  --    the food is gone (a no-show), so nothing comes back.
+  SELECT 'cancelled_order_released',
+         format('order %s is %s, never picked up, and still holds %s of item %s',
+                o.id, o.status, -res.quantity, res.menu_item_id)
+  FROM public.inventory_movements res
+  JOIN public.orders o      ON o.id = res.order_id
+  JOIN public.menu_items mi ON mi.id = res.menu_item_id
+  WHERE res.kind = 'reserve'
+    AND o.status IN ('rejected','cancelled','cancelled_by_customer',
+                     'cancelled_by_restaurant','cancelled_by_system',
+                     'cancelled_by_courier')
+    AND o.picked_up_at IS NULL
+    AND mi.stock_count IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM public.inventory_movements rel
+                    WHERE rel.order_id = res.order_id
+                      AND rel.menu_item_id = res.menu_item_id
+                      AND rel.kind = 'release')
+
+  UNION ALL
+  -- 6. A kitchen slot's count is the number of places still held in it.
+  SELECT 'slot_taken_matches_holds',
+         format('slot %s @ %s: taken %s, %s unreleased holds',
+                ks.restaurant_id, ks.slot_start, ks.taken, COALESCE(h.n, 0))
+  FROM public.kitchen_slots ks
+  LEFT JOIN (SELECT restaurant_id, slot_start, count(*) AS n
+             FROM public.kitchen_slot_holds WHERE released_at IS NULL
+             GROUP BY 1, 2) h
+    ON h.restaurant_id = ks.restaurant_id AND h.slot_start = ks.slot_start
+  WHERE ks.taken <> COALESCE(h.n, 0)
 $$;
 
 -- ===========================================================================

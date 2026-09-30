@@ -210,7 +210,8 @@ is easy to read them as meaning more.
 | **Proto contract + `buf breaking` gate** | `proto/`, CI job `proto-contract` |
 | **181 tests, all passing** | 142 Swift (`swift test`) + 39 Kotlin (`./gradlew test`) |
 | **Double-entry ledger in PostgreSQL** | `db/ledger/`: integer minor units, balanced at COMMIT by a deferred constraint trigger, idempotent posting by key. 85 tests; a Hypothesis state machine makes 1,019 postings, and 7 tests kill 18 backends mid-transaction (`KILL-TESTS 7 of 85; total kills 18`, printed by the suite). CI job `ledger-invariants`. Local PostgreSQL only; it is not wired to orders, whose money is still `numeric(10,2)` |
-| **The authored database schema** | `db/schema/`: 16 tables, the 36-edge transition table enforced by a trigger, every RPC the apps call. Applied to a fresh PostgreSQL 17 in CI and checked by `invariants.sql` (CI job `db-invariants`). Runs locally; there is no hosted instance |
+| **The authored database schema** | `db/schema/`: 19 tables, the 36-edge transition table enforced by a trigger, every RPC the apps call. Applied to a fresh PostgreSQL 17 in CI and checked by `invariants.sql` (CI job `db-invariants`). Runs locally; there is no hosted instance |
+| **A checkout that cannot oversell a kitchen** | `db/schema/` + `db/rush/`: scheduled pre-orders reserve stock and a kitchen slot at checkout and release them at most once, through a stock ledger. Found because 60 pre-orders went live for 40 portions. Measured under simulated rushes on one laptop, see [`db/rush/RESULTS.md`](db/rush/RESULTS.md). CI job `rush-invariants` |
 | **Probabilistic ETA and anomaly detection** | `ml/`: a pytest suite and a report-drift gate (CI job `ml-evaluation`). Measured on simulated orders only, and **no app uses it**: the consumer ETA is still haversine distance over a fixed speed |
 | **Payout saga, hand-built vs Temporal** | `db/temporal_payout/`: the same crash matrix against both, on a Temporal dev server (CI job `temporal-payout`). Never run against a production Temporal cluster. A lost provider reply is handled status-first: in a simulated, pre-registered matrix (4 strategies x 6 fault modes x 200 seeds) it had 0 double or orphaned payouts in 1,200 runs, where failing on the timeout had 600. [Details](db/temporal_payout/README.md#when-the-providers-reply-is-lost) |
 
@@ -319,8 +320,8 @@ through the FFM API, which was still a preview feature in 21.
 
 ### CI gates
 
-Ten jobs in `.github/workflows/ci.yml`. Each exists because of a
-specific class of defect:
+Eleven jobs in `.github/workflows/ci.yml`. Each exists because of a specific class of
+defect:
 
 | job | catches |
 |---|---|
@@ -333,6 +334,7 @@ specific class of defect:
 | `temporal-payout` | the Temporal payout saga paying twice or losing a payout when workers are SIGKILLed or frozen mid-activity. Runs its suite and the hand-built vs Temporal crash matrix once |
 | `ml-evaluation` | an ML method that stops behaving, or a README/FINDINGS number that no longer matches what the code produces |
 | `db-invariants` | a grant, policy, constraint or generated column that drifted from the security rules, asserted against a freshly applied PostgreSQL 17 |
+| `rush-invariants` | a checkout that oversells a dish or a kitchen. 200 simultaneous checkouts for 40 portions against four strategies and the real `create_order`, plus the pre-order regressions; fails on any oversell or stock-conservation violation, and fails if the deliberately unsafe strategy stops overselling |
 | `secret-scan` | a committed `service_role` JWT, which would be a full database compromise. Decodes every JWT and inspects the `role` claim rather than grepping for a word that legitimately appears in docs |
 
 **A gate nobody has watched fail should not be trusted**, and this repository has direct

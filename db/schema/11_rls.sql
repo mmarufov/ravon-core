@@ -138,6 +138,12 @@ ALTER TABLE public.courier_earnings          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chat_messages             ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.courier_cancellation_log  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.order_transitions         ENABLE ROW LEVEL SECURITY;
+-- Stock ledger and kitchen slots: RLS on and NO policy, so no client role can
+-- read or write them at all. Only the SECURITY DEFINER checkout, activation and
+-- cancel paths touch them.
+ALTER TABLE public.inventory_movements       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.kitchen_slots             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.kitchen_slot_holds        ENABLE ROW LEVEL SECURITY;
 
 -- ===========================================================================
 -- profiles

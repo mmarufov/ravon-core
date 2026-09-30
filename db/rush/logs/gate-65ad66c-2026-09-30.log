@@ -1,0 +1,41 @@
+read_then_write        K=200   +  0ms run 0: sold=200   oversell=160  lost=199  cons=1 p50=86.4 p99=148.0 1343/s rtt=0.09 {'ok': 200}
+read_then_write        K=200   +  0ms run 1: sold=200   oversell=160  lost=199  cons=1 p50=62.6 p99=105.0 1893/s rtt=0.12 {'ok': 200}
+read_then_write        K=200   +  0ms run 2: sold=200   oversell=160  lost=199  cons=1 p50=60.8 p99=97.9 2033/s rtt=0.14 {'ok': 200}
+row_lock               K=200   +  0ms run 0: sold=40    oversell=0    lost=0    cons=0 p50=27.1 p99=35.5 5598/s rtt=0.12 {'ok': 40, 'sold_out': 160}
+row_lock               K=200   +  0ms run 1: sold=40    oversell=0    lost=0    cons=0 p50=18.1 p99=23.9 8343/s rtt=0.06 {'ok': 40, 'sold_out': 160}
+row_lock               K=200   +  0ms run 2: sold=40    oversell=0    lost=0    cons=0 p50=16.9 p99=23.5 8405/s rtt=0.17 {'ok': 40, 'sold_out': 160}
+conditional_decrement  K=200   +  0ms run 0: sold=40    oversell=0    lost=0    cons=0 p50=16.3 p99=25.5 7756/s rtt=0.09 {'ok': 40, 'sold_out': 160}
+conditional_decrement  K=200   +  0ms run 1: sold=40    oversell=0    lost=0    cons=0 p50=18.4 p99=29.1 6778/s rtt=0.16 {'ok': 40, 'sold_out': 160}
+conditional_decrement  K=200   +  0ms run 2: sold=40    oversell=0    lost=0    cons=0 p50=13.6 p99=20.6 9670/s rtt=0.14 {'ok': 40, 'sold_out': 160}
+reservation_rows       K=200   +  0ms run 0: sold=40    oversell=0    lost=0    cons=0 p50=11.4 p99=15.0 12799/s rtt=0.14 {'ok': 40, 'sold_out': 160}
+reservation_rows       K=200   +  0ms run 1: sold=40    oversell=0    lost=0    cons=0 p50=11.4 p99=14.9 13283/s rtt=0.13 {'ok': 40, 'sold_out': 160}
+reservation_rows       K=200   +  0ms run 2: sold=40    oversell=0    lost=0    cons=0 p50=13.1 p99=13.9 14271/s rtt=0.13 {'ok': 40, 'sold_out': 160}
+rpc/now_stock          K=200   run 0: live=40    bound=40 oversell=0 cons=0 p50=390.8 p99=547.5 {'INSUFFICIENT_STOCK': 160, 'ok': 40} []
+rpc/now_stock          K=200   run 1: live=40    bound=40 oversell=0 cons=0 p50=133.0 p99=156.5 {'INSUFFICIENT_STOCK': 160, 'ok': 40} []
+rpc/now_stock          K=200   run 2: live=40    bound=40 oversell=0 cons=0 p50=111.4 p99=129.7 {'INSUFFICIENT_STOCK': 160, 'ok': 40} []
+rpc/now_capacity       K=200   run 0: live=25    bound=25 oversell=0 cons=0 p50=541.1 p99=914.0 {'OVERLOADED': 175, 'ok': 25} []
+rpc/now_capacity       K=200   run 1: live=25    bound=25 oversell=0 cons=0 p50=189.0 p99=357.8 {'OVERLOADED': 175, 'ok': 25} []
+rpc/now_capacity       K=200   run 2: live=25    bound=25 oversell=0 cons=0 p50=206.4 p99=389.7 {'OVERLOADED': 175, 'ok': 25} []
+rpc/scheduled_stock    K=200   run 0: live=200   bound=40 oversell=160 cons=1 p50=107.3 p99=253.6 {'ok': 200} ['stock 0 + live 200 != 40']
+rpc/scheduled_stock    K=200   run 1: live=200   bound=40 oversell=160 cons=1 p50=66.2 p99=128.6 {'ok': 200} ['stock 0 + live 200 != 40']
+rpc/scheduled_stock    K=200   run 2: live=200   bound=40 oversell=160 cons=1 p50=44.9 p99=84.4 {'ok': 200} ['stock 0 + live 200 != 40']
+rpc/scheduled_capacity K=200   run 0: live=200   bound=25 oversell=175 cons=1 p50=42.3 p99=80.9 {'ok': 200} ['stock 0 + live 200 != 40']
+rpc/scheduled_capacity K=200   run 1: live=200   bound=25 oversell=175 cons=1 p50=41.2 p99=77.0 {'ok': 200} ['stock 0 + live 200 != 40']
+rpc/scheduled_capacity K=200   run 2: live=200   bound=25 oversell=175 cons=1 p50=46.0 p99=82.6 {'ok': 200} ['stock 0 + live 200 != 40']
+
+| target | strategy | K | added latency | runs | sold (min to max) | oversells (sum) | max oversell in a run | lost updates (sum) | conservation violations | p50 ms | p99 ms | checkouts/s |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| strategies | `read_then_write` | 200 | 0 ms | 3 | 200 to 200 | 480 | 160 | 597 | 3 | 62.6 | 105.01 | 1,892.7 |
+| strategies | `row_lock` | 200 | 0 ms | 3 | 40 to 40 | 0 | 0 | 0 | 0 | 18.05 | 23.85 | 8,343.3 |
+| strategies | `conditional_decrement` | 200 | 0 ms | 3 | 40 to 40 | 0 | 0 | 0 | 0 | 16.29 | 25.53 | 7,755.5 |
+| strategies | `reservation_rows` | 200 | 0 ms | 3 | 40 to 40 | 0 | 0 | 0 | 0 | 11.42 | 14.95 | 13,283.1 |
+| rpc | `now_stock` | 200 | 0 ms | 3 | 40 to 40 | 0 | 0 | 0 | 0 | 133.02 | 156.49 | 1,273.9 |
+| rpc | `now_capacity` | 200 | 0 ms | 3 | 25 to 25 | 0 | 0 | 0 | 0 | 206.36 | 389.67 | 508.8 |
+| rpc | `scheduled_stock` | 200 | 0 ms | 3 | 200 to 200 | 480 | 160 | 480 | 3 | 66.2 | 128.57 | 1,536.1 |
+| rpc | `scheduled_capacity` | 200 | 0 ms | 3 | 200 to 200 | 525 | 175 | 480 | 3 | 42.27 | 80.87 | 2,450.4 |
+GATE FAIL: rpc/scheduled_stock K=200 run 0: oversells=160 violations=['stock 0 + live 200 != 40']
+GATE FAIL: rpc/scheduled_stock K=200 run 1: oversells=160 violations=['stock 0 + live 200 != 40']
+GATE FAIL: rpc/scheduled_stock K=200 run 2: oversells=160 violations=['stock 0 + live 200 != 40']
+GATE FAIL: rpc/scheduled_capacity K=200 run 0: oversells=175 violations=['stock 0 + live 200 != 40']
+GATE FAIL: rpc/scheduled_capacity K=200 run 1: oversells=175 violations=['stock 0 + live 200 != 40']
+GATE FAIL: rpc/scheduled_capacity K=200 run 2: oversells=175 violations=['stock 0 + live 200 != 40']
