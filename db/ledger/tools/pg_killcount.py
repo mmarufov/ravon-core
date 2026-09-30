@@ -59,13 +59,16 @@ class KillCounter:
         self.dbname = dbname
         self.per_test: dict[str, int] = {}
 
-    # Setup through call, not teardown: the session fixture drops the test
-    # database during the last test's teardown, and its statistics row goes
-    # with it. No fixture in the suite kills a backend on teardown.
+    # The test call only, between fixture setup and teardown. The session
+    # fixture drops and recreates the test database during the first test's
+    # setup and drops it again during the last test's teardown, and each time
+    # its statistics row starts over. Reading before setup once made a stale
+    # database from an aborted run count as -17 kills for the first test. No
+    # fixture in the suite kills a backend.
     @pytest.hookimpl(hookwrapper=True)
     def pytest_runtest_setup(self, item: pytest.Item):
-        self._before = sessions_killed(self.conn, self.dbname)
         yield
+        self._before = sessions_killed(self.conn, self.dbname)
 
     @pytest.hookimpl(hookwrapper=True)
     def pytest_runtest_call(self, item: pytest.Item):

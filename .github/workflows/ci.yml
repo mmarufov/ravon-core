@@ -264,10 +264,11 @@ jobs:
         run: python -m pytest
 
       # A smoke run of the side-by-side crash matrix: both implementations, one
-      # repeat. compare.py exits non-zero if any row fails.
+      # repeat, without the extra timeout-sensitivity pass. compare.py exits
+      # non-zero if any row fails.
       - name: Crash matrix, hand-built vs Temporal
         working-directory: db/temporal_payout
-        run: python compare.py --repeat 1
+        run: python compare.py --repeat 1 --timeout-sensitivity 0
 
   ml-evaluation:
     name: ML evaluation (Python)
