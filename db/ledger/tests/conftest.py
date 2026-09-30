@@ -20,6 +20,11 @@ from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
 from ledger_api import Ledger
 
+# Prints "KILL-TESTS <n> of <tests>; total kills <k>" at the end of every run.
+# Imported as hooks rather than via pytest_plugins, which pytest only honours in
+# a rootdir conftest.
+from killcount import pytest_runtest_logreport, pytest_terminal_summary  # noqa: F401
+
 SCHEMA_PATH = pathlib.Path(__file__).resolve().parents[1] / "schema.sql"
 
 # Matches the docker one-liner in db/ledger/README.md. Override with LEDGER_DSN.
