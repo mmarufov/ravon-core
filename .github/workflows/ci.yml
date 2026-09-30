@@ -270,6 +270,15 @@ jobs:
         working-directory: db/temporal_payout
         run: python compare.py --repeat 1 --timeout-sensitivity 0
 
+      # Simulated: 4 strategies for a lost provider reply x 6 fault modes (+ a
+      # control), 10 seeds. --check is the gate fixed in
+      # PREREGISTRATION-ambiguity.md: status-first has no double, orphaned or
+      # phantom payout; the control is clean; and fresh-key retries must still
+      # produce doubles, or the detector is broken.
+      - name: Ambiguous-timeout matrix (10 seeds)
+        working-directory: db/temporal_payout
+        run: python ambiguity_matrix.py --seeds 10 --check
+
   ml-evaluation:
     name: ML evaluation (Python)
     # macOS, like dispatch-quality, and for a related reason: the report-drift check

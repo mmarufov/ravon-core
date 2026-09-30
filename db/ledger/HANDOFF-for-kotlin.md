@@ -149,6 +149,8 @@ Parse `DETAIL` as JSON and switch on `reason`. Do not match on the message text.
 | `NEGATIVE_BALANCE_NOT_ALLOWED` | 409 | over-refund, over-payout, over-spend |
 | `PAYOUT_NOT_SUBMITTED` | 409 | posting before the provider accepted |
 | `PAYOUT_ALREADY_FAILED` | 409 | payout is terminal |
+| `PAYOUT_VERDICT_REQUIRED` | 422 | tried to fail a payout, or resume a `pending`/`unknown` one, without the provider's answer. Ask the provider for status first |
+| `PAYOUT_VERDICT_CONFLICT` | 409 | the verdict contradicts what is recorded: `declined`/`not_found` for a posted payout, or `not_found` for one the provider gave a ref for |
 | `UNBALANCED_TRANSACTION` | 422 | debits ≠ credits — **a bug in the caller**, log loudly |
 | `MIXED_CURRENCY_TRANSACTION` | 422 | one transaction spans two currencies |
 | `CURRENCY_MISMATCH_ACCOUNT` | 422 | leg currency ≠ account currency |
@@ -205,15 +207,24 @@ ledger_payout_post(payout_id)
 
 Failure handling:
 
-* `ledger_payout_fail(payout_id, reason)` — if not yet posted, marks it failed
-  with no ledger effect; if already posted, writes a **reversing transaction**.
-* `ledger_payout_resume(payout_id, provider_ref)` — the recovery path. Pass the
-  ref if the provider confirms it saw the request, `NULL` if it never did.
+* `ledger_payout_mark_unknown(payout_id)`: the provider call timed out. The
+  payout is now `unknown`, and neither post nor fail will accept it until the
+  provider has answered.
+* `ledger_payout_fail(payout_id, verdict, reason)`: `verdict` is the provider's
+  answer, `declined`, `not_found` or `returned`, and is required. If not yet
+  posted, marks it failed with no ledger effect; if already posted, only
+  `returned` is accepted, and it writes a **reversing transaction**.
+* `ledger_payout_resume(payout_id, provider_ref, verdict)`: the recovery path.
+  Pass the ref if the provider has the payout, or its verdict if it does not.
+  With neither, a `pending` or `unknown` payout is refused
+  (`PAYOUT_VERDICT_REQUIRED`); it is never failed on a guess. A timeout is not
+  a verdict: see `db/temporal_payout/` for the status-first recovery.
 
 The ledger effect is keyed `payout:<payout_id>`, so `ledger_payout_post` can run
 any number of times and land exactly once. That is what makes the saga safe to
-resume after a crash at any boundary — which is tested by killing the backend at
-each of them (`test_payout_saga.py`).
+resume after a crash at any boundary, which `test_payout_saga.py` tests at each
+of them (killing the backend at the two in-transaction points, stopping the
+driver at the others).
 
 **The service may own this state machine instead of these functions.** If it
 does, it must keep the idempotency key derivation identical —

@@ -199,8 +199,9 @@ one query:
 * every cached balance equals the model
 * per order, `refunded ≤ captured`
 
-A representative run: **3,415 invariant checks, 1,019 postings, 476 rejected
-operations across 166 examples.** The test asserts floors on those counters,
+A representative run: **3,854 invariant checks, 1,019 postings, 205 rejected
+operations across 191 examples.** Those counts are a fingerprint of the test's
+source, not a stable property: see FINDINGS §14. The test asserts floors on those counters,
 because a stateful suite whose bundles never fill still passes, and passing for
 that reason is worse than failing — see FINDINGS §3.
 

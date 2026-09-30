@@ -25,7 +25,8 @@ from temporalio.exceptions import ApplicationError
 import faults
 import provider
 from ledger_api import Ledger, LedgerError
-from shared import FailCall, MarkCall, PayoutRequest, Posted, PostCall, ProviderCall
+from shared import (FailCall, MarkCall, PayoutRequest, Posted, PostCall, ProviderAnswer,
+                    ProviderCall, StatusCall)
 
 # Schema reasons that mean "try again", not "this request is wrong".
 RETRYABLE_REASONS = {"PAYOUT_RACE_RETRY", "IDEMPOTENCY_RACE_RETRY"}
@@ -61,10 +62,38 @@ def begin_payout(req: PayoutRequest) -> str:
 
 @activity.defn
 @faults.injectable("provider")
-def submit_to_provider(call: ProviderCall) -> str | None:
-    # Repeat-safe only because the provider is idempotent on request_id.
-    return provider.submit(os.environ["PROVIDER_DSN"], call.request_id,
-                           call.amount_minor, call.currency)
+def submit_to_provider(call: ProviderCall) -> ProviderAnswer:
+    # Repeat-safe only because the provider is idempotent on request_id, and
+    # only while it still holds the key. A lost reply is therefore not retried
+    # blind: the payout is marked unknown, and the provider is asked.
+    dsn = os.environ["PROVIDER_DSN"]
+    try:
+        reply = provider.pay(dsn, call.request_id, call.amount_minor, call.currency)
+        return ProviderAnswer(reply.provider_ref, reply.status,
+                              "declined" if reply.status == "failed" else None)
+    except provider.ProviderTimeout:
+        if call.payout_id:
+            with _ledger() as ledger:
+                ledger.payout_mark_unknown(UUID(call.payout_id))
+        answer = _ask(dsn, call.request_id)
+        if answer.status == "not_found":
+            # A definitive "never received". Resubmitting under the same
+            # request id cannot pay twice, so let Temporal retry the activity.
+            raise ApplicationError("provider has no record of the request; resubmitting",
+                                   type="PROVIDER_NOT_FOUND")
+        return answer
+
+
+def _ask(dsn: str, request_id: str) -> ProviderAnswer:
+    st = provider.status(dsn, request_id)
+    return ProviderAnswer(st.provider_ref, st.state, st.failure_code)
+
+
+@activity.defn
+@faults.injectable("status")
+def provider_status(call: StatusCall) -> ProviderAnswer:
+    # Read-only, so repeat-safe by construction.
+    return _ask(os.environ["PROVIDER_DSN"], call.request_id)
 
 
 @activity.defn
@@ -89,7 +118,8 @@ def post_payout(call: PostCall) -> Posted:
 @faults.injectable("fail")
 def fail_payout(call: FailCall) -> str:
     with _ledger() as ledger:
-        return ledger.payout_fail(UUID(call.payout_id), call.reason)
+        return ledger.payout_fail(UUID(call.payout_id), call.verdict, call.reason)
 
 
-ALL = [begin_payout, submit_to_provider, mark_submitted, post_payout, fail_payout]
+ALL = [begin_payout, submit_to_provider, provider_status, mark_submitted, post_payout,
+       fail_payout]

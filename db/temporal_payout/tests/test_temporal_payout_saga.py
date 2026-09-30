@@ -62,7 +62,8 @@ MID_ACTIVITY = {
 }
 
 STEP_OF = {"begin_payout": "begin", "submit_to_provider": "provider",
-           "mark_submitted": "mark", "post_payout": "post", "fail_payout": "fail"}
+           "provider_status": "status", "mark_submitted": "mark", "post_payout": "post",
+           "fail_payout": "fail"}
 
 
 def _payout(ledger: Ledger, amount: int = AMOUNT) -> tuple[PayoutRequest, UUID]:
