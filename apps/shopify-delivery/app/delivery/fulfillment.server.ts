@@ -176,7 +176,9 @@ export async function fulfillOne(deps: FulfillDeps, job: Claimed): Promise<Finis
   if (res.errors?.length) throw new Error(`fulfillmentCreate: ${JSON.stringify(res.errors)}`);
 
   // The kill point: Shopify has replied, nothing local has been committed.
-  maybeCrash(deps.crash, "after_fulfillment_reply", job.id, attempt, {
+  maybeCrash(deps.crash, "after_fulfillment_reply", job.order_gid, {
+    jobId: job.id,
+    attempt,
     shopifyFulfillment: res.data?.fulfillmentCreate?.fulfillment?.id ?? null,
   });
 

@@ -8,7 +8,12 @@ The template is MIT-licensed (`LICENSE.md`, copyright Shopify).
 Not copied: the template repo's `.github/`, and its agent config files (`.claude/`,
 `.cursor/`, `.gemini/`, `.mcp.json`, `CLAUDE.md`, `AGENTS.md`).
 `shopify.web.toml.liquid` was rendered to `shopify.web.toml` for npm, as `shopify app init`
-would have done.
+would have done. The template's README is kept as `TEMPLATE-README.md`.
+
+Template files this project changed, each in a later commit: `app/shopify.server.ts` (API
+version 2026-07, an `afterAuth` hook that opens the shop's intake window),
+`shopify.app.toml` (scopes and the orders webhooks), `package.json` (scripts and
+dependencies), and `.gitignore` (the lockfile is committed so CI can `npm ci`).
 
 **Template-provided, and not claimed as this project's work:** OAuth and the install flow,
 session storage (Prisma, SQLite), webhook HMAC verification (`authenticate.webhook`), the

@@ -181,6 +181,7 @@ CREATE TABLE IF NOT EXISTS throttle_events (
   maximum        double precision,
   restore_rate   double precision,
   wait_ms        double precision,
+  seeded         boolean,   -- had this process seen a reply yet (false: just restarted)
   at             timestamptz NOT NULL DEFAULT clock_timestamp()
 );
 

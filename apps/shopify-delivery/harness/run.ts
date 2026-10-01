@@ -233,6 +233,10 @@ const SCENARIOS: Record<string, Scenario> = {
       return f;
     },
   },
+  // The overlap window matters when the search index lags by about a sweep interval.
+  // At the full run's 0.5 to 1.5 s lag and 2 s sweeps a miss is rare (about 6% per
+  // all-dropped order), so the pair below uses 1 to 5 s lag and 1 s sweeps: the same
+  // conditions with and without the overlap.
   overlap0: {
     ...BASE,
     name: "overlap0",
@@ -240,15 +244,33 @@ const SCENARIOS: Record<string, Scenario> = {
     cancel: 0,
     crashRate: 0,
     overlapMs: 0,
+    lagMs: [1000, 5000],
+    sweepEveryMs: 1000,
     timeoutMs: 120000,
     check: (m) =>
       m.ordersNeverDispatched.length > 0
         ? []
         : ["with no overlap window every all-dropped order was still recovered"],
   },
+  overlap_on: {
+    ...BASE,
+    name: "overlap_on",
+    n: 150,
+    cancel: 0,
+    crashRate: 0,
+    overlapMs: 10000,
+    lagMs: [1000, 5000],
+    sweepEveryMs: 1000,
+    timeoutMs: 120000,
+    check: (m) => {
+      const f = exactlyOnce(m);
+      if (m.ordersAllDeliveriesDropped.length === 0) f.push("no order had every delivery dropped");
+      return f;
+    },
+  },
 };
 
-const ORDER = ["full", "dedupe", "receipts", "sweep", "status_check", "lifecycle", "lifecycle_on", "pacing", "pacing_on", "overlap0"];
+const ORDER = ["full", "dedupe", "receipts", "sweep", "status_check", "lifecycle", "lifecycle_on", "pacing", "pacing_on", "overlap0", "overlap_on"];
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -269,16 +291,19 @@ async function settle(pool: pg.Pool, fake: FakeShopify, s: Scenario, lastEventAt
               OR (status = 'delivered' AND fulfillment_state IN ('none','pending'))) AS moving`,
     );
     const row = r.rows[0];
-    const sig = `${row.jobs}/${row.dispatches}/${row.intents}/${fake.stats.fulfillmentCreateAccepted}`;
+    // Admin API traffic counts as progress (a pacer waiting out the bucket is not stuck),
+    // except the sweep's, which never stops.
+    const work = fake.stats.requests - (fake.stats.byOperation.RavonSweepOrders ?? 0);
+    const sig = `${row.jobs}/${row.dispatches}/${row.intents}/${fake.stats.fulfillmentCreateAccepted}/${work}`;
     if (sig !== last) {
       last = sig;
       stableSince = Date.now();
     }
+    const stableMs = Date.now() - stableSince;
+    if (Date.now() > quietAfter && Number(row.moving) === 0 && stableMs > 2000) return true;
     // `moving` can stay above zero in a control (an undispatchable job, a stuck lease);
-    // there the run ends when nothing has changed for 6 s after the quiet point.
-    const quiet = Date.now() > quietAfter && Date.now() - stableSince > 6000;
-    if (Date.now() > quietAfter && Number(row.moving) === 0 && Date.now() - stableSince > 2000) return true;
-    if (quiet) return true;
+    // there the run ends when nothing at all has changed for 30 s after the quiet point.
+    if (Date.now() > quietAfter && stableMs > 30000) return true;
   }
   return false;
 }

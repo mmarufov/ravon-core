@@ -20,6 +20,9 @@ export interface ThrottleEvent {
   maximum: number | null;
   restoreRate: number | null;
   waitMs: number;
+  // Whether this process had a reply from Shopify yet when the event happened: a throttle
+  // before the first reply is the restarted-worker case.
+  seeded?: boolean;
 }
 
 export interface Bucket {
@@ -154,6 +157,10 @@ export class CostPacer {
     await this.sleep(ms);
   }
 
+  isSeeded(shop: string): boolean {
+    return this.seeded.has(shop);
+  }
+
   record(e: ThrottleEvent) {
     this.opts.record?.(e);
   }
@@ -194,6 +201,7 @@ export async function paced(
     pacer.record({
       shop,
       operation,
+      seeded: pacer.isSeeded(shop),
       kind: "throttled",
       requestedCost: cost,
       available: t?.currentlyAvailable ?? null,

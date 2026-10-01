@@ -78,9 +78,9 @@ async function main() {
       pool
         .query(
           `INSERT INTO throttle_events (shop, operation, kind, requested_cost, available, maximum,
-                                        restore_rate, wait_ms)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-          [e.shop, e.operation, e.kind, e.requestedCost, e.available, e.maximum, e.restoreRate, e.waitMs],
+                                        restore_rate, wait_ms, seeded)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [e.shop, e.operation, e.kind, e.requestedCost, e.available, e.maximum, e.restoreRate, e.waitMs, e.seeded ?? null],
         )
         .catch((err) => console.error("throttle_events insert failed", err));
     },

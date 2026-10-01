@@ -1,6 +1,9 @@
 // F1, the flash-sale replay (PREREGISTRATION.md). SYNTHETIC LOAD on one machine.
 //
-//   tsx harness/flash-sale.ts --orders 1000 --seconds 60 --dups 100 --payload <file> --out results.json
+//   tsx harness/flash-sale.ts --orders 1000 --seconds 60 --dups 100 --bodies <file> --out results.json
+//
+// --bodies is a JSON array of scrubbed captured orders/create bodies (export-capture.ts
+// --bodies); order i is a clone of body i mod length. Without it, the recorded template.
 //
 // Captured orders/create bodies are cloned into `--orders` orders with new ids, re-signed
 // with SHOPIFY_API_SECRET (the app secret on a developer's machine; a dummy in CI), and
@@ -43,6 +46,8 @@ async function main() {
 
   const template = JSON.parse(readFileSync(payloadFile, "utf8"));
   delete template._provenance;
+  const bodiesFile = get("--bodies");
+  const captured: Record<string, unknown>[] = bodiesFile ? JSON.parse(readFileSync(bodiesFile, "utf8")) : [template];
 
   await migrate(pgUrl, { fresh: true });
   const pool = new pg.Pool({ connectionString: pgUrl, max: 4 });
@@ -112,6 +117,7 @@ async function main() {
       const webhookId = uuidFrom(`${seed}:wh:${i}`);
       return { o, i, webhookId };
     });
+    const indexOf = new Map(orders.map(({ o, i }) => [o.gid, i]));
     const dupIdx = new Set<number>();
     for (let k = 0; dupIdx.size < Math.min(dups, n); k++) {
       dupIdx.add(Math.floor(uniforms(`${seed}:dup:${k}`, 1)[0] * n));
@@ -142,7 +148,21 @@ async function main() {
         const o = fake.orders.get(s.gid)!;
         o.createdAt = new Date(now);
         o.updatedAt = new Date(now);
-        body = JSON.stringify({ ...fake.payloadFor(o), created_at: now, updated_at: now, processed_at: now });
+        // A captured body with only its identity and timestamps replaced.
+        const k = indexOf.get(s.gid)!;
+        const ids = fake.payloadFor(o);
+        body = JSON.stringify({
+          ...captured[k % captured.length],
+          id: ids.id,
+          admin_graphql_api_id: ids.admin_graphql_api_id,
+          name: ids.name,
+          order_number: ids.order_number,
+          cancelled_at: null,
+          cancel_reason: null,
+          created_at: now,
+          updated_at: now,
+          processed_at: now,
+        });
         bodies.set(s.gid, body);
       }
       const headers = {
@@ -209,8 +229,10 @@ async function main() {
         at: new Date().toISOString(),
         machine: execSync("sysctl -n machdep.cpu.brand_string 2>/dev/null || uname -m", { encoding: "utf8" }).trim(),
         node: process.version,
-        payload: payloadFile,
-        payloadProvenance: JSON.parse(readFileSync(payloadFile, "utf8"))._provenance ?? null,
+        payload: bodiesFile ?? payloadFile,
+        payloadProvenance: bodiesFile
+          ? `${captured.length} scrubbed orders/create bodies captured from the development store`
+          : JSON.parse(readFileSync(payloadFile, "utf8"))._provenance ?? null,
         secret: process.env.SHOPIFY_API_SECRET ? "app secret from env" : "dummy",
       },
       command: process.argv.join(" "),

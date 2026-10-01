@@ -33,12 +33,13 @@ describe("fault plan", () => {
 });
 
 describe("crash selection", () => {
-  it("selects about `rate` of jobs, and only on the first attempt", () => {
+  it("selects about `rate` of orders, the same ones every time", () => {
     const plan = parseCrash("seed=s,rate=0.15,point=after_fulfillment_reply")!;
     let n = 0;
     for (let i = 0; i < 10000; i++) {
-      if (selected(plan, `job-${i}`, 1)) n++;
-      expect(selected(plan, `job-${i}`, 2)).toBe(false);
+      const gid = `gid://shopify/Order/${i}`;
+      if (selected(plan, gid)) n++;
+      expect(selected(plan, gid)).toBe(selected({ ...plan }, gid));
     }
     expect(Math.abs(n / 10000 - 0.15)).toBeLessThan(0.015);
   });

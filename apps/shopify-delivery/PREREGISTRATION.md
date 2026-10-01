@@ -93,3 +93,12 @@ pacing, sweep overlap 0) must show its predicted failure, or the job fails.
   was being written, to debug it. Those runs are not reported anywhere. The first was
   what showed that a restarted worker bursts into a drained bucket (57 THROTTLED with
   pacing on), which led to the persisted bucket model in `throttle.server.ts`.
+- 2026-10-01, before any reported run: the `overlap0` control is run at search-index lag
+  1 to 5 s with sweeps every 1 s, paired with an `overlap_on` run at the same settings,
+  instead of at the full run's 0.5 to 1.5 s lag. At the full run's settings a miss needs
+  the sweep to land in a sub-second window, about 6% per all-dropped order, so with about
+  6 such orders per run the control would show its failure in only about 30% of runs. The
+  first local run of `overlap0` at the old settings did not show a miss.
+- 2026-10-01: the harness's settle check now counts Admin API requests as progress and
+  waits 30 s of no change while jobs are still moving. The old 6 s rule ended `pacing_on`
+  while the pacer was correctly waiting out a small bucket (21 of 100 fulfilled).
