@@ -1,463 +1,369 @@
 # Ravon
 
-A three-sided food-delivery marketplace for Dushanbe, Tajikistan — consumer, merchant and
-courier iOS apps over one shared Swift package, a PostgreSQL data model, and a dispatch
-engine that assigns couriers to orders as a minimum-cost matching problem rather than a
-first-come-first-served job board. This repository is `RavonCore`: the shared package, the
-dispatch engine and its evaluation harness, the order lifecycle model, and the CI gates.
-The dispatch service tier has been **extracted to Kotlin/gRPC and is deployed** at
-[`ravon-api.fly.dev`](https://ravon-api.fly.dev); the order and ledger tiers are not.
+Food delivery for Dushanbe, Tajikistan, built around three hard problems: which courier
+gets which order, money that cannot be lost or paid twice, and a checkout that cannot sell
+more food than the kitchen has.
 
-The interesting part of a delivery marketplace is not the CRUD. It is deciding which
-courier gets which order, proving that decision is correct, and measuring whether it is
-actually better — under conditions you can state.
+[![CI](https://github.com/mmarufov/ravon-core/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mmarufov/ravon-core/actions/workflows/ci.yml)
+[![Dispatch API](https://img.shields.io/website?url=https%3A%2F%2Fravon-api.fly.dev%2Fhealth&label=dispatch%20API&up_message=live)](https://ravon-api.fly.dev/health)
+![Swift · Kotlin · PostgreSQL](https://img.shields.io/badge/Swift%20·%20Kotlin%20·%20PostgreSQL-1A1A2E)
 
----
+Ravon is three iOS apps (consumer, merchant, courier) on one shared Swift package, a Kotlin
+dispatch service, and a PostgreSQL core. This repository contains everything except the
+app screens: the shared package, the dispatch engine and service, the database schema,
+ledger and payout saga, the ML layer, and the CI gates that hold all of it to its claims.
 
-## Measured results
+## Highlights
 
-Every number below was produced by running the code in this repository. Each is stated
-with the caveat that bounds it, because a number without its conditions is not a result.
-
-### Dispatch: minimum-cost matching vs. greedy FCFS
-
-30 seeds · 12 couriers · 240 orders · 180-minute window, in a deterministic simulator:
-
-| metric | result |
+| Area | Result |
 |---|---|
-| orders assigned to a courier | **+44.6%** (min +29.9%, max +53.8%) |
-| mean **modeled** delivery time | **−45.3%** (range −51.7% to −39.7%) |
-| total courier travel | −1.1% mean — but the worst seed is **+2.1%** |
-| seeds where matching won | **30 / 30**, strictly |
+| **Dispatch** | Minimum-cost matching assigns **+44.6%** more orders than greedy first-come-first-served and cuts modeled delivery time by **45.3%**. It wins on **30 of 30** seeds. [→](#dispatch-is-a-matching-problem) |
+| **Cross-language port** | The engine was ported from Swift to Kotlin with **660 of 660** baseline metrics identical, compared bit for bit, not within a tolerance. [→](#porting-an-algorithm-without-changing-it) |
+| **Ledger** | PostgreSQL rejects any transaction where debits ≠ credits, at COMMIT. It holds with **18** database backends killed mid-transaction. [→](#money-is-enforced-by-the-database) |
+| **Payouts** | When the payment provider's reply is lost: **0** wrong-money outcomes in 1,200 simulated runs, against 600 for failing on the timeout. [→](#money-is-enforced-by-the-database) |
+| **Checkout** | 1,000 simultaneous pre-orders for 40 portions: **1,000** went live before the fix, exactly **40** after it. [→](#a-checkout-that-cannot-oversell) |
+| **ETA** | A probabilistic (Weibull) delivery-time model cuts CRPS by **55.8%** against the naive formula, and its p80 quote is on time **80.4%** of the time. [→](#probabilistic-eta) |
 
-**Caveat, and it is the important half: the advantage is a function of courier scarcity
-and vanishes entirely once supply exceeds demand.** Holding demand at 240 orders, seed 42:
+Ravon has not launched. Marketplace numbers come from a deterministic simulator, and each
+section links the command that reproduces them.
 
-| couriers | greedy | matching | gain |
-|---|---|---|---|
-| 6 | 63 | 100 | **+58.7%** |
-| 12 | 115 | 162 | +40.9% |
-| 24 | 234 | 240 | +2.6% |
-| 48 | 240 | 240 | **0.0%** |
+## Try it
 
-This is a peak-load optimisation — worth a great deal at the dinner rush and nothing on a
-slow Tuesday. It is pinned as a test so nobody later tunes dispatch for a regime where it
-cannot matter.
+The dispatch service is deployed. This batch has two couriers and two orders:
 
-**Second caveat: these are simulator numbers, not delivery times.** Distance is
-straight-line Haversine with no road network, kitchen prep is drawn from a uniform
-distribution, and couriers never decline an offer. The *comparison* is sound because both
-strategies run in the identical world; the absolute minutes are not an ETA.
+```bash
+curl -s https://ravon-api.fly.dev/ravon.dispatch.v1.DispatchService/Assign \
+  -H 'Content-Type: application/json' -d '{
+  "now": "2026-10-01T12:00:00Z",
+  "couriers": [
+    {"courierId": "00000000-0000-0000-0000-00000000000a",
+     "location": {"latitude": 38.56, "longitude": 68.770},
+     "idleSince": "2026-10-01T11:50:00Z"},
+    {"courierId": "00000000-0000-0000-0000-00000000000b",
+     "location": {"latitude": 38.56, "longitude": 68.862},
+     "idleSince": "2026-10-01T11:50:00Z"}
+  ],
+  "orders": [
+    {"orderId": "00000000-0000-0000-0000-000000000001",
+     "createdAt": "2026-10-01T11:45:00Z", "readyAt": "2026-10-01T12:10:00Z",
+     "pickup": {"latitude": 38.56, "longitude": 68.793},
+     "dropoff": {"latitude": 38.57, "longitude": 68.80}},
+    {"orderId": "00000000-0000-0000-0000-000000000002",
+     "createdAt": "2026-10-01T11:58:00Z", "readyAt": "2026-10-01T12:10:00Z",
+     "pickup": {"latitude": 38.56, "longitude": 68.760},
+     "dropoff": {"latitude": 38.55, "longitude": 68.75}}
+  ]
+}'
+```
 
-**Third caveat: "on less fuel" would be an overclaim.** The mean travel difference is
-−1.1%, but the per-seed spread crosses zero. "No measurable travel penalty" is what the
-data supports.
+```json
+{"assignments": [
+  {"courierId": "…000a", "orderId": "…0002", "costMinutes": 7.705273374457107},
+  {"courierId": "…000b", "orderId": "…0001", "costMinutes": -2.2762166585692505}
+]}
+```
 
-→ [Full study](docs/dispatch-engine.md) · [ADR 0002](docs/adr/0002-min-cost-matching-over-greedy.md)
+Courier A is 2 km from the older order 1 and 0.9 km from order 2. Courier B is 6 km from
+order 1 and 8.9 km from order 2, outside the 8 km radius. A greedy dispatcher serves the
+oldest order first with its nearest courier, so it sends A to order 1 and order 2 waits
+with nobody left to reach it. The matcher solves the whole batch at once and serves both.
+A cost goes negative when an order's waiting time and a courier's idle time are credited
+back, which is how a stale order outranks a cheap new one.
 
-### Experiment design: measuring the bias of A/B designs against ground truth
-
-A simulator can do what production cannot — run the whole world on algorithm A, then on
-algorithm B with the same seed, so the *true* effect is known and each experiment design's
-bias can be measured rather than argued about.
-
-| dispatch partition | true lift | naive A/B mean \|bias\| | switchback mean \|bias\| |
-|---|---|---|---|
-| none | 21.1 pts | 23.3 pts | 22.3 pts |
-| 3×3 zones | 1.9 pts | **3.0 pts** | **3.3 pts** |
-
-Both designs were initially biased by more than the entire effect they were estimating.
-The cause was not interference between arms — it was a **granularity mismatch**: a batch
-optimiser's effect is a property of the whole dispatch decision, so splitting orders
-between arms measures a different algorithm. Making dispatch itself run per zone cut
-absolute bias about **7×**.
-
-**Caveat 1 — the negative result.** At this scale, once dispatch is zone-partitioned,
-plain order-level randomisation is about as unbiased as a switchback. This does not
-reproduce DoorDash's headline; it localises why switchbacks matter (densely coupled
-markets with real carryover between time blocks, which 12 couriers over 9 zones is not).
-
-**Caveat 2 — relative bias got *worse*.** Absolute bias fell 23.3 → 3.0 points, but the
-true effect fell 21.1 → 1.9 at the same time. As a fraction of the effect, bias went from
-~1.1× to ~1.6×.
-
-**Caveat 3 — zones cost optimality.** That shrinking true effect is the third finding:
-partitioning 3×3 cost most of the optimiser's advantage, because a courier cannot serve
-an adjacent zone even when they are closest.
-
-→ [Full study](docs/experiment-design-study.md) · [ADR 0004](docs/adr/0004-zone-partitioning.md)
-
-### Correctness properties
-
-| property | how it is established |
-|---|---|
-| The matcher returns the true optimum | exhaustive permutation search over 300 random matrices, exact equality |
-| The order lifecycle graph is live | 17 property-based invariants over a declared 36-edge, 17-state, 4-actor transition table |
-| The graph is cyclic, and termination is not free | Tarjan SCC pass found exactly one cycle — courier cancellation requeues the order — so termination depends on a server-side rate limit, which is now asserted |
-| Simulations are reproducible | same seed ⇒ identical assignments, delivery times, travel and per-courier job counts |
-| The Kotlin port did not change the algorithm | 30 seeds × 2 dispatchers × 11 metrics reproduced from the Swift original, doubles compared **bitwise** — 660 numbers, not a tolerance |
-| An incompatible `.proto` change fails the build | `buf breaking` exits **100** on a renumbered or deleted field and **0** on an added one — measured, not assumed |
-
-The lifecycle suite caught a modelling error in its own author's first version of the
-transition table. That is the argument for declaring the state machine as data.
-
-### Provenance of these numbers
-
-The dispatch sources and their tests are committed and run in CI. Since
-[`17b5db0`](https://github.com/mmarufov/ravon-core/commit/17b5db0) the engine is **Kotlin**,
-and these figures are produced by `./gradlew :dispatch:test` — reproducing the Swift
-original bit-for-bit, which is what makes them the same numbers rather than merely similar
-ones.
-
-Figures drifted while the simulator changed: an earlier draft of these docs recorded
-+42.2% orders and "−1.4% courier travel". Both were superseded by measurement. The travel
-figure was the misleading one — the mean is −1.06%, but the worst single seed is **+2.13%**,
-so optimal matching sometimes drives *further*, and "no measurable travel penalty" is the
-defensible claim rather than "less travel".
-
----
+The same endpoint speaks gRPC, gRPC-Web and Protobuf-JSON. `GET /health` returns
+`{"healthy":true}`.
 
 ## Architecture
 
-Solid lines exist. Dashed lines do not.
-
 ```mermaid
-flowchart TB
-    subgraph clients["Untrusted — ships on a device the user controls"]
-        C["Consumer iOS<br/>browse · order · track"]
-        M["Merchant iOS<br/>menu · hours · queue"]
-        K["Courier iOS<br/>claim · navigate · deliver"]
-    end
-
-    CORE["<b>RavonCore</b> — shared Swift package<br/>models · auth · realtime · theme"]
-
-    C --- CORE
-    M --- CORE
-    K --- CORE
-
-    subgraph trusted["Trusted — server-side, holds credentials clients never see"]
+flowchart LR
+    subgraph clients["iOS · SwiftUI"]
         direction TB
-        DISP["<b>ravon-api</b> — Kotlin, deployed<br/>dispatch: min-cost matching"]
-        SVC["<b>Service tier</b> — not built<br/>order saga · ledger · fraud"]
-        PG[("<b>PostgreSQL</b><br/>RLS · pg_cron · PostGIS<br/>append-only transition log")]
-        RT["Realtime<br/>(Postgres CDC → WebSocket)"]
-        AUTH["Supabase Auth<br/>email OTP · JWT"]
-
-        SVC -.->|"service role"| PG
-        PG --> RT
+        APPS["Consumer · Merchant · Courier"]
+        CORE["<b>RavonCore</b><br/>models · auth · realtime · UI"]
+        APPS --> CORE
     end
 
-    CORE ==>|"PostgREST: reads"| PG
-    CORE ==>|"WebSocket: order status,<br/>courier location, chat"| RT
-    CORE ==>|"JWT"| AUTH
-    CORE -.->|"gRPC-Web: Assign"| DISP
-    CORE -.->|"gRPC: writes"| SVC
+    subgraph data["PostgreSQL"]
+        direction TB
+        SCHEMA["Schema · RLS · RPCs<br/>lifecycle enforced by trigger"]
+        SAGA["Payout saga<br/>hand-built and Temporal"]
+        LEDGER["Double-entry ledger<br/>balanced at COMMIT"]
+        SAGA --> LEDGER
+    end
 
-    AUTH -.->|"JWKS verify, sub → user id"| SVC
+    subgraph service["ravon-api · Kotlin · Fly.io"]
+        direction TB
+        API["Assign<br/>gRPC · gRPC-Web · JSON"]
+        ENG["Dispatch engine<br/>Hungarian matching"]
+        API --> ENG
+    end
 
-    style trusted fill:#f6f6f8,stroke:#1A1A2E,stroke-width:2px
-    style clients fill:#fff4f1,stroke:#FF3008,stroke-width:2px
-    style SVC stroke-dasharray: 5 5
-    style DISP fill:#eaf7ee,stroke:#1A1A2E,stroke-width:2px
+    subgraph eval["Evaluation"]
+        direction TB
+        SIM["Deterministic<br/>marketplace simulator"]
+        ML["Probabilistic ETA<br/>anomaly detection"]
+        SIM --> ML
+    end
+
+    CORE -->|"PostgREST · Realtime"| SCHEMA
+    PROTO[["proto/ contract<br/>buf breaking in CI"]] --> API
+    SIM -->|"30-seed baseline"| ENG
 ```
 
-Four things this diagram is trying to say:
+- **The client is untrusted.** Each app ships the public anon key, so every policy and RPC
+  that key can reach is written to be safe against direct `curl`. Row-level security,
+  column grants and `SECURITY DEFINER` RPCs carry the authorization, and the
+  `db-invariants` CI job checks them against a freshly applied database.
+- **The order lifecycle is data.** It has 17 states, 36 edges and 4 actors, declared once
+  in `OrderLifecycle.swift` and enforced by a trigger in `db/schema/03_lifecycle.sql`.
+  A transition that is not in the table cannot be written.
+- **Dispatch was extracted first** because it is pure computation (couriers and orders in,
+  assignments out) and because the Swift original served as a test oracle. That made the
+  port provable before anything stateful moved.
+- **Events stay in Postgres.** Durability, ordering and replay come from an append-only
+  transition table plus change data capture, so state and its event are a single write
+  with no outbox. ([ADR 0006](docs/adr/0006-postgres-over-kafka.md))
 
-1. **The trust boundary is the box, not the network hop.** Everything above it runs on
-   hardware the user owns, so every value it sends is an assertion. The anon key it ships
-   with is public client config; anything reachable with it must be safe against `curl`.
-   Row-level security stays on after the service tier lands — it becomes defence in depth
-   rather than the only gate.
-2. **Two transports, on purpose.** Commands need global state and transactional integrity,
-   so they go to the service tier. Reads and subscriptions stay on PostgREST and Postgres
-   CDC because those already work and rebuilding them buys nothing. This is what an
-   incremental extraction looks like partway through.
-3. **Dispatch has moved server-side**, and the reason it went first is worth stating
-   precisely. The usual framing — "it shipped in the client package, and a phone cannot
-   see the other couriers" — was true about where the code sat and false about what was
-   happening: *nothing called it*. It was a research artifact compiled into three app
-   binaries as dead weight. The real reason it went first is that it had a **test oracle**
-   — a complete reference implementation to diff against — so the port was provable and
-   carried no regression risk. Only `Assign` is dashed-to here because no client generates
-   against the contract yet.
-4. **Realtime is change-data-capture, not a second source of truth.**
+## Engineering notes
 
-→ [Diagram notes](docs/architecture.md) · [ADR 0005](docs/adr/0005-extract-to-kotlin-not-rewrite.md)
+### Dispatch is a matching problem
 
----
+Greedy dispatch hands the oldest order to the nearest courier, one order at a time.
+Ravon's engine solves each batch as a minimum-cost bipartite matching (Hungarian
+algorithm, Jonker–Volgenant form). The cost is deliberately not distance. It is minutes of
+travel plus time spent waiting at the restaurant, minus capped credits for how long an
+order has waited and how long a courier has been idle. Pure distance minimization starves
+couriers on the edge of town and lets old orders lose forever to newer, closer ones.
 
-## What's real, what's simulated, what's not built
+The simulator ran 30 seeds with 12 couriers, 240 orders and a 180-minute window:
 
-Stating this boundary is the point. The dispatch numbers mean something specific and it
-is easy to read them as meaning more.
-
-### Real — code in this repository, exercised by tests
-
-| | Evidence |
+| metric | matching vs greedy |
 |---|---|
-| Shared Swift package: models, auth, realtime, theme | `Sources/RavonCore/` — 43 files, 7,454 lines |
-| Hungarian solver, verified optimal against brute force | `Dispatch/HungarianSolver.swift`, 300 matrices |
-| Cost model with capped urgency and fairness credits | `Dispatch/Dispatcher.swift` |
-| Deterministic marketplace simulator with latent state | `Dispatch/MarketplaceSimulator.swift` |
-| Zone partitioning and the switchback harness | `Dispatch/{DispatchZone,SwitchbackExperiment}.swift` |
-| 17-state, 36-edge, 4-actor declared transition table | `Models/OrderLifecycle.swift` |
-| 17 property-based lifecycle invariants incl. Tarjan SCC | `Tests/.../OrderLifecycleInvariantTests.swift` |
-| Email-OTP auth flow, typed errors, shared SwiftUI | `UI/Auth/` |
-| Schema-drift and JWT-decoding credential CI gates | `scripts/` |
-| **Kotlin dispatch service, deployed** | [`ravon-api.fly.dev`](https://ravon-api.fly.dev) — 2 machines, Frankfurt |
-| **Bit-exact Kotlin port of the engine** | `services/dispatch/` — 660 baseline numbers matched exactly |
-| **`Assign` over gRPC, gRPC-Web and Protobuf-JSON** | `services/server/` — Armeria, no Envoy |
-| **Proto contract + `buf breaking` gate** | `proto/`, CI job `proto-contract` |
-| **181 tests, all passing** | 142 Swift (`swift test`) + 39 Kotlin (`./gradlew test`) |
-| **Double-entry ledger in PostgreSQL** | `db/ledger/`: integer minor units, balanced at COMMIT by a deferred constraint trigger, idempotent posting by key. 85 tests; a Hypothesis state machine makes 1,019 postings, and 7 tests kill 18 backends mid-transaction (`KILL-TESTS 7 of 85; total kills 18`, printed by the suite). CI job `ledger-invariants`. Local PostgreSQL only; it is not wired to orders, whose money is still `numeric(10,2)` |
-| **The authored database schema** | `db/schema/`: 19 tables, the 36-edge transition table enforced by a trigger, every RPC the apps call. Applied to a fresh PostgreSQL 17 in CI and checked by `invariants.sql` (CI job `db-invariants`). Runs locally; there is no hosted instance |
-| **A checkout that cannot oversell a kitchen** | `db/schema/` + `db/rush/`: scheduled pre-orders reserve stock and a kitchen slot at checkout and release them at most once, through a stock ledger. Found because 60 pre-orders went live for 40 portions. Measured under simulated rushes on one laptop, see [`db/rush/RESULTS.md`](db/rush/RESULTS.md). CI job `rush-invariants` |
-| **Probabilistic ETA and anomaly detection** | `ml/`: a pytest suite and a report-drift gate (CI job `ml-evaluation`). Measured on simulated orders only, and **no app uses it**: the consumer ETA is still haversine distance over a fixed speed |
-| **Payout saga, hand-built vs Temporal** | `db/temporal_payout/`: the same crash matrix against both, on a Temporal dev server (CI job `temporal-payout`). Never run against a production Temporal cluster. A lost provider reply is handled status-first: in a simulated, pre-registered matrix (4 strategies x 6 fault modes x 200 seeds) it had 0 double or orphaned payouts in 1,200 runs, where failing on the timeout had 600. [Details](db/temporal_payout/README.md#when-the-providers-reply-is-lost) |
+| orders assigned | **+44.6%** (range +29.9% to +53.8%) |
+| mean modeled delivery time | **−45.3%** (range −51.7% to −39.7%) |
+| total courier travel | −1.1% mean; worst seed +2.1% |
 
-### Simulated — real code, synthetic world
+The gain depends on how scarce couriers are. With demand fixed at 240 orders:
 
-| | What that means |
+| couriers | 6 | 12 | 24 | 48 |
+|---|---|---|---|---|
+| gain in orders assigned | **+58.7%** | +40.9% | +2.6% | 0.0% |
+
+So this is a peak-load optimization: it matters a great deal at the dinner rush and not at
+all on a slow afternoon. A test pins this curve so nobody tunes dispatch for a regime
+where it cannot help. The solver matches exhaustive search on 300 random matrices.
+Both strategies run in an identical simulated world, so the comparison is fair, but the
+absolute minutes are not real ETAs: travel is straight-line distance and couriers always
+accept.
+→ [Study](docs/dispatch-engine.md) · [ADR 0002](docs/adr/0002-min-cost-matching-over-greedy.md)
+
+**Measuring the experiment, too.** A simulator can run the same world under both
+algorithms, so the true effect is known and an A/B design's bias can be measured directly.
+Both naive A/B and switchback designs started out biased by more than the effect they were
+estimating. The cause was not interference between arms. It was a granularity mismatch:
+a batch optimizer's effect belongs to the whole dispatch decision, so splitting orders
+between arms measures a different algorithm. Partitioning dispatch into zones cut absolute
+bias from 23.3 to 3.0 points. The price is that a courier can no longer serve the
+neighboring zone, which gives up most of the optimizer's advantage. ADR 0004 weighs that
+trade.
+→ [Study](docs/experiment-design-study.md) · [ADR 0004](docs/adr/0004-zone-partitioning.md)
+
+### Porting an algorithm without changing it
+
+The Kotlin engine had to reproduce the Swift original exactly. Otherwise every number above
+would describe different code. The bar was 30 seeds × 2 dispatchers × 11 metrics, with
+doubles compared bitwise. Three problems were invisible in the code and only surfaced
+because the fixture refused to accept "close enough":
+
+- **Swift's random range mapping is two algorithms.** `next(upperBound:)` masks low bits
+  for power-of-two bounds and uses Lemire's nearly-divisionless method otherwise.
+  Implementing only one of them fails.
+- **`Math.sin` is not `sin`.** Over 600 bearings from the simulator's own generator:
+
+  | implementation | disagrees with Swift |
+  |---|---|
+  | `Math.sin` / `Math.cos` | 20.3% |
+  | `StrictMath.sin` / `StrictMath.cos` | 9.0% |
+  | platform libm through the FFM API | **0%** |
+
+  A 1-ULP difference near a tie changes which courier wins.
+- **Swift's `Date` epoch is 2001, not 1970.** At Unix magnitudes a double keeps different
+  residual precision. Costs drifted in the ninth decimal, flipped one greedy tie, and lost
+  one assignment on seed 1.
+
+One divergence is still open. Box–Muller is 1 ULP off, and that path is unreachable at the
+baseline configuration (every sigma is zero). A dedicated test pins that, so the gap
+cannot widen silently. → [ADR 0005](docs/adr/0005-extract-to-kotlin-not-rewrite.md)
+
+### Money is enforced by the database
+
+**Ledger.** Amounts are stored in integer minor units, and postings are idempotent by key.
+A `DEFERRABLE INITIALLY DEFERRED` constraint trigger checks at COMMIT that debits equal
+credits. Deferral is the design: a posting is unbalanced between its first leg and its
+last, so an immediate check would push the balance logic back into application code. The
+suite has 85 tests, including a Hypothesis state machine that makes 1,019 postings. Seven
+tests kill PostgreSQL backends mid-transaction, 18 kills in total. The kill count is read
+server-side from `pg_stat_database`, so the harness cannot overstate it.
+→ [`db/ledger`](db/ledger/README.md)
+
+**Payouts when the provider's reply is lost.** After a timeout, the money may have moved,
+may be pending, or may never have arrived, and both retrying and giving up can be wrong.
+Ravon marks the payout `unknown`, asks the provider for its status, and branches on the
+answer. A `CHECK` constraint makes "failed without a verdict" impossible to store. Four
+strategies were compared across 6 fault modes and 200 seeds, with the design
+pre-registered in a commit before the harness existed:
+
+| strategy | wrong-money outcomes |
 |---|---|
-| Every dispatch and experiment number in this README | Produced by `MarketplaceSimulator`, not by couriers |
-| Travel time | Haversine ÷ a fixed speed. No roads, no traffic, no turns |
-| Kitchen prep time | Uniform random, not learned |
-| Courier behaviour | An assigned courier always accepts. Real couriers decline |
-| Order arrivals | Synthetic, clustered around a modelled city centre |
+| retry with a fresh request id | 600 / 1,200 |
+| fail on timeout | 600 / 1,200 |
+| retry with the same request id | 200 / 1,200 (all after the provider's key expired) |
+| **status first** | **0 / 1,200** |
 
-### Not built
+The same saga also runs on Temporal, through the same crash matrix as the hand-built
+version, with workers SIGKILLed and frozen mid-activity. Either way, the safety of a
+re-run comes from Postgres: `ON CONFLICT`, idempotent transitions, and one ledger key per
+payout. → [`db/temporal_payout`](db/temporal_payout/README.md#when-the-providers-reply-is-lost)
 
-| | Status |
+### A checkout that cannot oversell
+
+A rush harness fires K simultaneous checkouts at the real `create_order` and at four
+concurrency strategies, with latency injected by Toxiproxy. It found that the order-now path
+held, but scheduled pre-orders did not reserve stock at checkout: 1,000 pre-orders for 40 portions all went
+live, in 10 of 10 runs. The fix reserves stock and a kitchen slot at checkout through a
+stock ledger, releasing each at most once. After the fix, exactly 40 sell.
+
+| strategy | runs that oversold |
 |---|---|
-| Order and ledger service tiers | Only `dispatch` is extracted. [ADR 0005](docs/adr/0005-extract-to-kotlin-not-rewrite.md) |
-| JWT interceptor on the service | `Assign` is pure computation and unauthenticated; the first authenticated RPC lands with the ledger tier |
-| `GetOffer` — the per-courier offer projection | Declared in the contract, returns `UNIMPLEMENTED`. It needs order state. It exists in `v1` now so the gate guards it from the start |
-| The apps calling the service | The engine is live and the contract is fixed; no client generates against it yet |
-| The ledger wired to orders | The ledger is tested on its own. Order totals are `numeric(10,2)` and the apps decode `Double` |
-| ML in the product | The ETA model is evaluated offline; the apps do not call it |
-| Demand forecasting | Not built |
-| Batching (multiple orders per courier) | Not modelled — the largest gap vs. the reference architecture |
-| Courier acceptance probability | Not modelled. There is no `courier_decline_order` RPC |
-| Dispatch wired to the app | The engine and its evaluation exist; no `dispatch_tick`, still `claim_order` |
+| read, then write | **60 / 60** |
+| row lock · conditional decrement · reservation rows | **0 / 180** |
 
-### One service runs. There is no hosted database.
+The real `create_order` served 1,000 simultaneous buyers at a p99 of 288 ms on a laptop.
+CI fails if any safe strategy oversells. It also fails if the unsafe one stops
+overselling, because a harness that can no longer catch the bug proves nothing.
+→ [Results](db/rush/RESULTS.md)
 
-The dispatch service is live at [`ravon-api.fly.dev`](https://ravon-api.fly.dev) — which is
-possible precisely because `Assign` is **pure computation**: couriers and orders in,
-assignments out, no persistence and no auth. That is why it was extracted first.
+### Probabilistic ETA
 
-Everything that needs storage is still blocked. **The Supabase project behind this system
-was deleted** — the host returns NXDOMAIN and the Management API returns 404 "Resource has
-been removed" for the project ref. The three iOS apps remain backend-less and nothing here
-can be run against live data.
+The model predicts a three-parameter Weibull over delivery time, fitted by interval
+regression, scored by CRPS, and turned into a customer quote by a separate decision layer
+with an explicit cost of being late. On 46,329 simulated orders held out by whole day:
 
-```
-$ curl https://ravon-api.fly.dev/health
-{"healthy":true}
+| model | MAE (min) | CRPS (min) |
+|---|---|---|
+| naive `prep + travel` | 37.18 | 37.18 |
+| conditional Weibull, at order creation | 23.55 | **16.42** |
 
-$ curl -X POST https://ravon-api.fly.dev/ravon.dispatch.v1.DispatchService/Assign \
-    -H 'Content-Type: application/json' -d @batch.json
-{"assignments":[
-  {"courierId":"…c0de-0","orderId":"…0dde-1","costMinutes":-23.976121668543847},
-  {"courierId":"…c0de-1","orderId":"…0dde-0","costMinutes":-10.989687123474436}]}
-```
+Its p80 quote is on time 80.4% of the time against a nominal 80%. On synthetic data the
+fit recovers a known shape parameter of 3.37 to within 0.8%.
+→ [`ml/`](ml/README.md) · [Findings](ml/FINDINGS.md)
 
-That response is worth reading closely: courier 0 is *nearer* order 0, and the matcher
-crossed them anyway, because order 1 is older and its urgency credit outweighs the extra
-distance. Negative costs are the credits applied. That crossing is the entire reason the
-matcher exists — a greedy dispatcher cannot produce it.
+## CI
 
-Consequences still worth knowing:
+Eleven jobs run on every push. Each one exists to catch a specific class of defect.
 
-- The 19 original SQL migrations were an incomplete record even when the project existed:
-  14 of 15 tables touched by Swift were never created by a migration, and six Postgres
-  enums were created through the dashboard. They now live in `db/migrations/`, tracked.
-- The schema has been rebuilt under `db/schema/` from the union of migrations, Swift
-  `Codable` models and call sites. It applies to a local PostgreSQL 17 and CI asserts its
-  invariants, but no hosted database runs it, so the apps still have nothing to talk to.
-- `scripts/schema_drift.py` reports 15 unverified findings, and that number is a **floor**:
-  its `case` parser reads only the first identifier per line, so it is blind to 36 of 265
-  wire keys — including `Profile.role` and `MenuItem.price`.
+| job | fails when |
+|---|---|
+| `test` | the Swift suite regresses |
+| `lifecycle-invariants` | a state-machine change breaks liveness or visibility, checked by 17 property-based invariants and a Tarjan SCC pass |
+| `dispatch-quality` | the Kotlin engine drifts from the 660-number baseline, or the over-the-wire `Assign` suite fails |
+| `proto-contract` | a `.proto` change would break a shipped app. `buf breaking` exits 100 on a renumbered or deleted field and 0 on an added one |
+| `schema-drift` | Swift `CodingKeys` diverge from SQL columns, which would otherwise surface as a decode crash in a shipped app |
+| `db-invariants` | a grant, policy or constraint drifts from the security rules on a fresh PostgreSQL 17 |
+| `ledger-invariants` | money stops balancing, or the suite stops killing exactly 18 backends |
+| `temporal-payout` | the Temporal saga pays twice or loses a payout under worker crashes |
+| `rush-invariants` | a checkout oversells, or the deliberately unsafe strategy stops overselling |
+| `ml-evaluation` | a model misbehaves, or a published number no longer matches the code |
+| `secret-scan` | a `service_role` JWT is committed. It decodes every JWT and checks the role claim |
 
-The best incident story in the project came from this: when the backend disappeared, the
-apps rendered "backend deleted" and "no orders today" identically. A typed service state
-that distinguishes *degraded* from *empty* is the fix, and it is not built either.
+## Design decisions
 
----
+Each ADR records the problem, the options considered, and what the choice cost.
+
+| ADR | Decision |
+|---|---|
+| [0001](docs/adr/0001-order-lifecycle-as-declared-data.md) | The order lifecycle is declared data, not scattered status checks |
+| [0002](docs/adr/0002-min-cost-matching-over-greedy.md) | Dispatch is minimum-cost matching, and it does not minimize distance |
+| [0003](docs/adr/0003-deterministic-simulation-as-evaluation.md) | Dispatch is evaluated by deterministic simulation with latent state |
+| [0004](docs/adr/0004-zone-partitioning.md) | Zone partitioning buys tractability and measurability, at a real cost |
+| [0005](docs/adr/0005-extract-to-kotlin-not-rewrite.md) | Extract a Kotlin service tier incrementally rather than rewrite |
+| [0006](docs/adr/0006-postgres-over-kafka.md) | Event guarantees come from Postgres, not Kafka |
+| [0007](docs/adr/0007-rejected-technologies.md) | Technologies deliberately not used, and what would change that |
+| [0008](docs/adr/0008-proto-contract-and-compatibility-gate.md) | The `.proto` files are the contract, and a gate enforces it |
+
+Some tools were left out on purpose, and each has a stated condition for revisiting it:
+
+| not used | why | revisit when |
+|---|---|---|
+| Kafka | An append-only table plus CDC gives durability, ordering and replay in one transactional write | several services exchange events, or sustained rates pass ~5,000/s |
+| Gurobi | The Hungarian algorithm solves single-order assignment exactly | batching turns it into vehicle routing (OR-Tools first) |
+| Cassandra | The ledger needs multi-row transactions and a deferred check at COMMIT | one tuned Postgres primary cannot absorb the writes |
+| Service mesh | gRPC already provides TLS, deadlines and retries in config | roughly 10+ services |
 
 ## Running it
 
 ```bash
-swift build
-swift test                                  # 142 tests: 81 XCTest + 61 swift-testing
-
-cd services && ./gradlew test               # 36 Kotlin tests
+swift test                          # 142 tests: shared package + Swift reference engine
+cd services && ./gradlew test       # 39 tests: Kotlin engine + server (JDK 22+)
+./gradlew :server:run               # local service on :8080, RPC explorer at /docs
 ```
 
-Targeted suites:
+The database suites run against any local PostgreSQL 16+ and create and drop their own
+databases. Setup is in [`db/ledger`](db/ledger/README.md), [`db/schema`](db/schema/README.md),
+[`db/rush`](db/rush/README.md) and [`ml/`](ml/README.md).
 
-```bash
-swift test --filter 'OrderLifecycle'                    # 17 — state-machine invariants
-cd services
-./gradlew :dispatch:test --tests '*DispatchBaselineTest' #  7 — 30-seed bit-exact baseline
-./gradlew :dispatch:test --tests '*HungarianSolverTest'  #  7 — incl. 300-matrix optimality
-./gradlew :dispatch:test --tests '*Switchback*'          #  7 — experiment-design bias
-./gradlew :server:test                                   #  7 — Assign over the wire
-```
+The Kotlin side needs JDK 22 or newer because `Libm` calls the platform libm through the
+FFM API.
 
-Run the service locally, and call it:
-
-```bash
-cd services && ./gradlew :server:run         # :8080
-curl localhost:8080/health
-open http://localhost:8080/docs              # Armeria's RPC explorer
-```
-
-Swift side requires Swift 5.9+, iOS 17+ / macOS 14+, with
-[`supabase-swift`](https://github.com/supabase/supabase-swift) the only third-party
-dependency. Kotlin side needs a **JDK 22 or newer** — `Libm` reaches the platform libm
-through the FFM API, which was still a preview feature in 21.
-
-### CI gates
-
-Eleven jobs in `.github/workflows/ci.yml`. Each exists because of a specific class of
-defect:
-
-| job | catches |
-|---|---|
-| `test` | ordinary regressions, across the whole Swift suite |
-| `lifecycle-invariants` | a state-machine change that breaks liveness or visibility — a marketplace correctness bug, not a flaky test |
-| `dispatch-quality` | dispatch getting worse for real couriers, which no unit test would notice. Runs the Kotlin engine **and** the over-the-wire server suite |
-| `proto-contract` | an incompatible schema change reaching a shipped iOS app, which has no forced-upgrade path. `buf lint` + `buf breaking` against `main` |
-| `schema-drift` | Swift `CodingKeys` diverging from the SQL columns. Not a compile error, not a test failure — a **decode crash in a shipped iOS app** |
-| `ledger-invariants` | money conservation, enforced by a deferred constraint trigger rather than application code, including under killed backends. Fails if the server stops counting exactly 18 kills in 7 tests |
-| `temporal-payout` | the Temporal payout saga paying twice or losing a payout when workers are SIGKILLed or frozen mid-activity. Runs its suite and the hand-built vs Temporal crash matrix once |
-| `ml-evaluation` | an ML method that stops behaving, or a README/FINDINGS number that no longer matches what the code produces |
-| `db-invariants` | a grant, policy, constraint or generated column that drifted from the security rules, asserted against a freshly applied PostgreSQL 17 |
-| `rush-invariants` | a checkout that oversells a dish or a kitchen. 200 simultaneous checkouts for 40 portions against four strategies and the real `create_order`, plus the pre-order regressions; fails on any oversell or stock-conservation violation, and fails if the deliberately unsafe strategy stops overselling |
-| `secret-scan` | a committed `service_role` JWT, which would be a full database compromise. Decodes every JWT and inspects the `role` claim rather than grepping for a word that legitimately appears in docs |
-
-**A gate nobody has watched fail should not be trusted**, and this repository has direct
-evidence for why. `schema-drift` was *structurally incapable of passing* from the day it
-was written — it read a gitignored directory — and nobody noticed for months, because CI
-had never executed at all. Both are fixed; the lesson is kept.
-
-So `proto-contract` was proven by breaking it on purpose:
-
-| change | `buf breaking` |
-|---|---|
-| renumber a field | exit **100** |
-| delete a field | exit **100** |
-| **add** a field | exit **0** — additive changes stay allowed |
-
-Both scripts also run locally:
-
-```bash
-python3 scripts/schema_drift.py    # 0 drift, 15 unverified — a floor, see above
-python3 scripts/scan_secrets.py .  # clean
-```
-
----
-
-## Deliberately not built
-
-Each rejection carries the threshold that would reverse it, because a rejection without a
-threshold is an excuse. Full reasoning in
-[ADR 0007](docs/adr/0007-rejected-technologies.md).
-
-| | Why not | Would become justified when |
-|---|---|---|
-| **Gurobi** | Single-order assignment is solved *exactly* by the Hungarian algorithm in microseconds; a commercial solver cannot beat optimal | Batching enters the model — then it is a vehicle-routing problem and the exact algorithm no longer applies. Try OR-Tools first |
-| **Kafka** | The guarantees — durability, ordering, replay, fan-out — are implemented on an append-only Postgres table plus CDC. Transactional emission is *better* this way: one write, no outbox | Multiple extracted services exchanging events, or sustained rates above ~5,000/s. Current arithmetic: ~2.5/s |
-| **Cassandra** | Every entity needs multi-row transactions; the ledger wants a deferred constraint at COMMIT, which has no Cassandra equivalent | Write throughput one tuned Postgres primary cannot absorb, after partitioning and read replicas |
-| **Service mesh** | One deployable today, at most four after the extraction. gRPC's own TLS, deadlines and retries cover it in config | ~10+ services, or more than two languages in the service tier |
-| **Feature store** | It prevents training/serving skew. There is no serving path, so skew cannot occur | The same feature is computed in both an offline job and an online request path |
-| **Bazel** | ~7,500 lines in one SwiftPM target; a clean build is seconds | CI wall-clock consistently over ~15 min with no cheaper fix left |
-
-The **monorepo** idea is separately correct and is being adopted; a distributed build
-system is a different decision that often gets conflated with it.
-
----
-
-## Porting an algorithm without changing it
-
-The Kotlin engine had to reproduce the Swift original **exactly**, not approximately —
-otherwise every measured claim above would quietly become a claim about different code.
-The bar was all 660 baseline numbers, compared bitwise. Three things had to be right, and
-none of them was visible before the fixture demanded them:
-
-**Swift's random range-mapping is not one algorithm.** SplitMix64 transcribes in ten
-lines. The mapping from 64 raw bits into a range does not: `next(upperBound:)` takes a
-**power-of-two fast path** that masks low bits, and otherwise uses **Lemire's
-nearly-divisionless** method. Implementing either alone fails — five golden vectors match
-Lemire, and the sixth, whose bound is exactly 2⁵³, only matches the mask.
-
-**`Math.sin` is not `sin`.** Measured over 600 bearings drawn from the simulator's own
-generator:
-
-| implementation | disagrees with Swift |
-|---|---|
-| `Math.sin` / `Math.cos` | **20.3%** of inputs |
-| `StrictMath.sin` / `StrictMath.cos` | **9.0%** |
-| platform libm via the FFM API | **0%** |
-
-One ULP sounds ignorable. It is not: the simulator feeds these into a cost comparison, and
-a last-bit flip near a tie changes which courier wins an assignment.
-
-**Swift's `Date` epoch is 2001, not 1970.** `Date` stores
-`timeIntervalSinceReferenceDate`, so the cost model's arithmetic happens at magnitude
-7.2 × 10⁸ rather than 1.7 × 10⁹ — and a double has different residual precision at each.
-Using the Unix value produced costs wrong in the *ninth decimal*, which flipped one greedy
-tie and lost exactly one assignment on seed 1 (109 against the recorded 110).
-
-None of these is findable by reading the code carefully. Each was found by a fixture that
-refused to accept "close enough" — which is the argument for setting the bar at bitwise in
-the first place.
-
-One divergence remains and is documented rather than hidden: the Box-Muller gaussian is
-1 ULP off and cannot be closed. It is unreachable in the verified regime, because
-`gaussian` short-circuits at `sigma <= 0` and the baseline configuration has every sigma
-zero — a dedicated test pins exactly that, so removing the short-circuit fails loudly.
-Under latent noise, compare distributions rather than bits.
-
----
-
-## Architecture Decision Records
-
-Each one states the problem, the options weighed, what was chosen, and what it cost.
-
-| # | Decision |
-|---|---|
-| [0001](docs/adr/0001-order-lifecycle-as-declared-data.md) | Model the order lifecycle as declared data, not scattered status checks |
-| [0002](docs/adr/0002-min-cost-matching-over-greedy.md) | Solve dispatch as minimum-cost matching, and do not minimise distance |
-| [0003](docs/adr/0003-deterministic-simulation-as-evaluation.md) | Evaluate dispatch by deterministic simulation, with latent state |
-| [0004](docs/adr/0004-zone-partitioning.md) | Zone partitioning: tractability *and* measurability, at a real cost |
-| [0005](docs/adr/0005-extract-to-kotlin-not-rewrite.md) | Extract a Kotlin service tier; do not rewrite the backend — **dispatch tier built and deployed; order and ledger tiers not** |
-| [0006](docs/adr/0006-postgres-over-kafka.md) | Implement the event guarantees on Postgres, not on Kafka |
-| [0007](docs/adr/0007-rejected-technologies.md) | Technologies deliberately not used, and what would change that |
-| [0008](docs/adr/0008-proto-contract-and-compatibility-gate.md) | The `.proto` files are the contract, and a gate enforces it |
-
-## Further reading
-
-- [Dispatch engine — design, results, limitations](docs/dispatch-engine.md)
-- [Experiment design under interference](docs/experiment-design-study.md)
-- [DeepRed — what DoorDash runs, and how Ravon compares](docs/deepred-research.md)
-- [Architecture diagram and notes](docs/architecture.md)
-
-## Using the package
+<details>
+<summary>Using RavonCore in an app</summary>
 
 ```swift
 import RavonCore
 
 RavonCore.configure(
     supabaseURL: URL(string: "https://YOUR-PROJECT.supabase.co")!,
-    supabaseAnonKey: "YOUR_ANON_KEY"   // inject from .xcconfig / Secrets.plist / CI secret
+    supabaseAnonKey: "YOUR_ANON_KEY"   // inject from .xcconfig or a CI secret
 )
 ```
 
-Configure once at launch, before any service is touched. The anon key is public client
-config, but credentials still do not belong in source control — which is what the
-`secret-scan` gate enforces. A `service_role` key must never appear in client code, a
-mobile binary, tracked docs or repo config, including in a private repo.
+Call `configure` once at launch, before using any service. Requires Swift 5.9+ and
+iOS 17+ / macOS 14+. UI strings are in Russian.
 
-UI strings are Russian (Cyrillic). Brand colour is `#FF3008`.
+</details>
+
+## Repository layout
+
+```
+Sources/RavonCore/   shared Swift package; Dispatch/ is the reference engine
+services/            Kotlin: dispatch/ engine, server/ gRPC service (deployed to Fly.io)
+proto/               the versioned service contract
+db/schema/           PostgreSQL schema, RLS, RPCs, lifecycle trigger
+db/ledger/           double-entry ledger and payout saga
+db/temporal_payout/  the same saga on Temporal, plus the lost-reply matrix
+db/rush/             concurrent-checkout harness and results
+ml/                  probabilistic ETA and anomaly detection
+docs/adr/            architecture decision records
+scripts/             schema-drift and secret-scan gates
+```
+
+## What's next
+
+- Generate clients from `proto/` and drive assignment through `Assign` instead of
+  first-tap claiming.
+- Put orders on the ledger. Order totals are still `numeric(10,2)`.
+- Add batching (several orders per courier) and courier accept/decline to the simulator.
+  These are the two biggest gaps against production dispatch systems.
+- Add authentication to the service. It arrives with the first stateful RPC.
+
+## Further reading
+
+- [Dispatch engine: design, results, limitations](docs/dispatch-engine.md)
+- [Experiment design under interference](docs/experiment-design-study.md)
+- [How DoorDash's dispatch works, and how Ravon compares](docs/deepred-research.md)
+- [Architecture notes](docs/architecture.md)
+
+---
+
+Built by [Muhammadjon Marufov](https://github.com/mmarufov).
