@@ -20,12 +20,16 @@ photo). No database required, so it runs in the same cheap CI job as the drift c
 """
 from __future__ import annotations
 
+import json
 import pathlib
 import re
 import sys
 
 SWIFT = pathlib.Path("Sources/RavonCore/Models/OrderLifecycle.swift")
 SQL = pathlib.Path("db/schema/03_lifecycle.sql")
+# A third, generated copy: the Shopify delivery app seeds its job-transition trigger from
+# it. `--emit-json` regenerates it from the SQL; the default run fails if it has drifted.
+APP_JSON = pathlib.Path("apps/shopify-delivery/app/delivery/lifecycle.edges.json")
 
 # Swift enum case name -> Postgres enum label. Only the multi-word ones differ.
 STATUS = {
@@ -87,7 +91,25 @@ def sql_edges() -> set[Edge]:
     return edges
 
 
+def edges_json(edges: set[Edge]) -> str:
+    rows = [
+        {"from": f, "to": t, "actor": a, "rpc": r, "guards": list(g)}
+        for f, t, a, r, g in sorted(edges)
+    ]
+    return json.dumps(rows, indent=2) + "\n"
+
+
+def app_json_edges() -> set[Edge]:
+    rows = json.loads(APP_JSON.read_text(encoding="utf-8"))
+    return {(r["from"], r["to"], r["actor"], r["rpc"], tuple(sorted(r["guards"]))) for r in rows}
+
+
 def main() -> int:
+    if "--emit-json" in sys.argv[1:]:
+        APP_JSON.write_text(edges_json(sql_edges()), encoding="utf-8")
+        print(f"wrote {APP_JSON} ({len(sql_edges())} edges from {SQL})")
+        return 0
+
     for path in (SWIFT, SQL):
         if not path.is_file():
             print(f"error: {path} not found", file=sys.stderr)
@@ -115,6 +137,18 @@ def main() -> int:
         return 1
 
     print("lifecycle parity OK — the Swift table and the SQL table are the same graph")
+
+    if APP_JSON.is_file():
+        app = app_json_edges()
+        if app != sq:
+            print(
+                f"\n{APP_JSON} has {len(app)} edges and differs from {SQL} by "
+                f"{len(app ^ sq)}. Regenerate it with "
+                f"`python3 scripts/lifecycle_parity.py --emit-json`.",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"lifecycle parity OK — {APP_JSON} is the same graph ({len(app)} edges)")
     return 0
 
 

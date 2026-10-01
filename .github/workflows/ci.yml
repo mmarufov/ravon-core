@@ -463,6 +463,84 @@ jobs:
             --dsn postgresql://postgres:ravon@127.0.0.1:5435/ravon_rush \
             --target strategies,rpc --k 200 --runs 3 --gate
 
+  shopify-delivery:
+    name: Shopify delivery app (fake Shopify, recorded payloads)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ravon
+        ports:
+          - 5436:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: apps/shopify-delivery
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/shopify-delivery/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      # The harness dispatches through a local ravon-api built from this commit, the
+      # same Assign the deployed service runs, never the deployed instance.
+      - name: Build and start the local Kotlin dispatch service
+        working-directory: services
+        run: |
+          ./gradlew --no-daemon --quiet :server:installDist -x test
+          PORT=18480 nohup ./server/build/install/server/bin/server > /tmp/ravon-api.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf localhost:18480/health && break; sleep 1; done
+
+      - name: Install, typecheck, build
+        run: |
+          npm ci
+          npx prisma generate
+          npx prisma migrate deploy
+          npm run typecheck
+          npm run build
+
+      - name: Unit tests
+        run: npm test
+
+      # Every mechanism and every negative control, against the fake Shopify, with the
+      # payload shape recorded from the development store and HMACs from a dummy
+      # secret. No network, no Shopify credentials. The `full` scenario must deliver
+      # every order exactly once through 20% drops, 10% duplicates, reordering and 20+
+      # SIGKILLs; each control must show the failure its mechanism prevents, or the job
+      # fails. harness/run.ts holds the targets.
+      - name: Fault harness and negative controls
+        env:
+          RAVON_PG_URL: postgresql://postgres:ravon@127.0.0.1:5436/postgres
+          RAVON_DISPATCH_URL: http://127.0.0.1:18480
+        run: npx tsx harness/run.ts --scenario all --log-dir /tmp --out /tmp/harness-results.json
+
+      - name: Harness results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shopify-harness-results
+          path: /tmp/harness-results.json
+          if-no-files-found: ignore
+
+      - name: Harness logs
+        if: always()
+        run: |
+          tail -n 50 /tmp/worker-full.log /tmp/web-full.log /tmp/ravon-api.log 2>/dev/null || true
+
   secret-scan:
     name: Secret scan
     runs-on: ubuntu-latest

@@ -1,0 +1,38 @@
+# This file stores configurations for your Shopify app.
+# client_id and application_url are filled in by `shopify app config link` and
+# `shopify app dev`; nothing secret belongs in this file.
+client_id = ""
+name = "Ravon Local Delivery"
+application_url = "https://example.com"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+
+[access_scopes]
+# orders: intake, the sweep, and the harness's test orders (orderCreate, orderCancel).
+# merchant-managed fulfillment orders: the fulfillment write-back.
+# shipping: the CarrierService stretch.
+# products: the template's demo page.
+scopes = "read_orders,write_orders,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders,read_shipping,write_shipping,write_products"
+
+[auth]
+redirect_urls = [ "https://example.com/api/auth" ]
+
+[webhooks]
+api_version = "2026-07"
+
+  # Handled by: /app/routes/webhooks.app.uninstalled.tsx
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/uninstalled"
+  topics = ["app/uninstalled"]
+
+  # Handled by: /app/routes/webhooks.app.scopes_update.tsx
+  [[webhooks.subscriptions]]
+  topics = [ "app/scopes_update" ]
+  uri = "/webhooks/app/scopes_update"
+
+  # Handled by: /app/routes/webhooks.orders.tsx. Needs protected customer data access.
+  [[webhooks.subscriptions]]
+  topics = [ "orders/create", "orders/updated", "orders/cancelled" ]
+  uri = "/webhooks/orders"

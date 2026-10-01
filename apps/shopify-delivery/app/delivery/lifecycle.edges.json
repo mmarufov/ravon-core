@@ -1,0 +1,284 @@
+[
+  {
+    "from": "accepted",
+    "to": "assigned",
+    "actor": "courier",
+    "rpc": "claim_order",
+    "guards": [
+      "courierNotBusy",
+      "courierNotSuspended",
+      "courierOnline"
+    ]
+  },
+  {
+    "from": "accepted",
+    "to": "cancelled_by_customer",
+    "actor": "consumer",
+    "rpc": "cancel_order_by_consumer",
+    "guards": []
+  },
+  {
+    "from": "accepted",
+    "to": "cancelled_by_restaurant",
+    "actor": "merchant",
+    "rpc": "merchant_cancel_order",
+    "guards": []
+  },
+  {
+    "from": "accepted",
+    "to": "cancelled_by_system",
+    "actor": "system",
+    "rpc": "run_courier_escalation_ladder",
+    "guards": []
+  },
+  {
+    "from": "accepted",
+    "to": "preparing",
+    "actor": "merchant",
+    "rpc": "merchant_start_preparing",
+    "guards": []
+  },
+  {
+    "from": "accepted",
+    "to": "ready",
+    "actor": "merchant",
+    "rpc": "merchant_mark_order_ready",
+    "guards": []
+  },
+  {
+    "from": "assigned",
+    "to": "cancelled_by_courier",
+    "actor": "courier",
+    "rpc": "cancel_order_by_courier",
+    "guards": [
+      "nonReassignableReason",
+      "notOnCancelCooldown"
+    ]
+  },
+  {
+    "from": "assigned",
+    "to": "cancelled_by_customer",
+    "actor": "consumer",
+    "rpc": "cancel_order_by_consumer",
+    "guards": []
+  },
+  {
+    "from": "assigned",
+    "to": "cancelled_by_system",
+    "actor": "system",
+    "rpc": "run_courier_escalation_ladder",
+    "guards": []
+  },
+  {
+    "from": "assigned",
+    "to": "courier_arrived_restaurant",
+    "actor": "courier",
+    "rpc": "courier_arrived_restaurant",
+    "guards": []
+  },
+  {
+    "from": "assigned",
+    "to": "ready",
+    "actor": "courier",
+    "rpc": "cancel_order_by_courier",
+    "guards": [
+      "notOnCancelCooldown",
+      "reassignableReason"
+    ]
+  },
+  {
+    "from": "courier_arrived_customer",
+    "to": "cancelled_by_system",
+    "actor": "system",
+    "rpc": "mark_no_show_deliveries",
+    "guards": []
+  },
+  {
+    "from": "courier_arrived_customer",
+    "to": "delivered",
+    "actor": "courier",
+    "rpc": "courier_deliver_order",
+    "guards": [
+      "deliveryCode"
+    ]
+  },
+  {
+    "from": "courier_arrived_customer",
+    "to": "delivered",
+    "actor": "courier",
+    "rpc": "courier_deliver_order",
+    "guards": [
+      "proofImage"
+    ]
+  },
+  {
+    "from": "courier_arrived_restaurant",
+    "to": "cancelled_by_courier",
+    "actor": "courier",
+    "rpc": "cancel_order_by_courier",
+    "guards": [
+      "nonReassignableReason",
+      "notOnCancelCooldown"
+    ]
+  },
+  {
+    "from": "courier_arrived_restaurant",
+    "to": "cancelled_by_customer",
+    "actor": "consumer",
+    "rpc": "cancel_order_by_consumer",
+    "guards": []
+  },
+  {
+    "from": "courier_arrived_restaurant",
+    "to": "cancelled_by_system",
+    "actor": "system",
+    "rpc": "run_courier_escalation_ladder",
+    "guards": []
+  },
+  {
+    "from": "courier_arrived_restaurant",
+    "to": "picked_up",
+    "actor": "courier",
+    "rpc": "courier_pickup_order",
+    "guards": [
+      "pickupCode"
+    ]
+  },
+  {
+    "from": "courier_arrived_restaurant",
+    "to": "ready",
+    "actor": "courier",
+    "rpc": "cancel_order_by_courier",
+    "guards": [
+      "notOnCancelCooldown",
+      "reassignableReason"
+    ]
+  },
+  {
+    "from": "created",
+    "to": "accepted",
+    "actor": "merchant",
+    "rpc": "merchant_accept_order",
+    "guards": []
+  },
+  {
+    "from": "created",
+    "to": "cancelled_by_customer",
+    "actor": "consumer",
+    "rpc": "cancel_order_by_consumer",
+    "guards": []
+  },
+  {
+    "from": "created",
+    "to": "cancelled_by_system",
+    "actor": "system",
+    "rpc": "run_courier_escalation_ladder",
+    "guards": []
+  },
+  {
+    "from": "created",
+    "to": "rejected",
+    "actor": "merchant",
+    "rpc": "merchant_reject_order",
+    "guards": []
+  },
+  {
+    "from": "delivering",
+    "to": "courier_arrived_customer",
+    "actor": "courier",
+    "rpc": "courier_arrived_at_customer",
+    "guards": []
+  },
+  {
+    "from": "picked_up",
+    "to": "delivering",
+    "actor": "courier",
+    "rpc": "courier_start_delivering",
+    "guards": []
+  },
+  {
+    "from": "preparing",
+    "to": "assigned",
+    "actor": "courier",
+    "rpc": "claim_order",
+    "guards": [
+      "courierNotBusy",
+      "courierNotSuspended",
+      "courierOnline"
+    ]
+  },
+  {
+    "from": "preparing",
+    "to": "cancelled_by_customer",
+    "actor": "consumer",
+    "rpc": "cancel_order_by_consumer",
+    "guards": []
+  },
+  {
+    "from": "preparing",
+    "to": "cancelled_by_restaurant",
+    "actor": "merchant",
+    "rpc": "merchant_cancel_order",
+    "guards": []
+  },
+  {
+    "from": "preparing",
+    "to": "cancelled_by_system",
+    "actor": "system",
+    "rpc": "run_courier_escalation_ladder",
+    "guards": []
+  },
+  {
+    "from": "preparing",
+    "to": "ready",
+    "actor": "merchant",
+    "rpc": "merchant_mark_order_ready",
+    "guards": []
+  },
+  {
+    "from": "ready",
+    "to": "assigned",
+    "actor": "courier",
+    "rpc": "claim_order",
+    "guards": [
+      "courierNotBusy",
+      "courierNotSuspended",
+      "courierOnline"
+    ]
+  },
+  {
+    "from": "ready",
+    "to": "cancelled_by_customer",
+    "actor": "consumer",
+    "rpc": "cancel_order_by_consumer",
+    "guards": []
+  },
+  {
+    "from": "ready",
+    "to": "cancelled_by_restaurant",
+    "actor": "merchant",
+    "rpc": "merchant_cancel_order",
+    "guards": []
+  },
+  {
+    "from": "ready",
+    "to": "cancelled_by_system",
+    "actor": "system",
+    "rpc": "run_courier_escalation_ladder",
+    "guards": []
+  },
+  {
+    "from": "scheduled",
+    "to": "cancelled_by_customer",
+    "actor": "consumer",
+    "rpc": "cancel_order_by_consumer",
+    "guards": []
+  },
+  {
+    "from": "scheduled",
+    "to": "created",
+    "actor": "system",
+    "rpc": "activate_scheduled_orders",
+    "guards": []
+  }
+]

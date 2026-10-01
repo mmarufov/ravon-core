@@ -1,0 +1,54 @@
+{
+  "_provenance": "SYNTHETIC placeholder in the shape of Shopify's REST order payload, written before the development store existed. Replaced by a scrubbed capture from run R1; see README.md.",
+  "id": 0,
+  "admin_graphql_api_id": "gid://shopify/Order/0",
+  "app_id": null,
+  "buyer_accepts_marketing": false,
+  "cancel_reason": null,
+  "cancelled_at": null,
+  "closed_at": null,
+  "confirmed": true,
+  "contact_email": "test.buyer@example.com",
+  "created_at": "2026-10-01T00:00:00Z",
+  "currency": "USD",
+  "current_subtotal_price": "10.00",
+  "current_total_price": "12.00",
+  "email": "test.buyer@example.com",
+  "financial_status": "paid",
+  "fulfillment_status": null,
+  "name": "#1000",
+  "note": null,
+  "order_number": 1000,
+  "phone": null,
+  "presentment_currency": "USD",
+  "processed_at": "2026-10-01T00:00:00Z",
+  "subtotal_price": "10.00",
+  "tags": "ravon-harness",
+  "test": true,
+  "total_price": "12.00",
+  "updated_at": "2026-10-01T00:00:00Z",
+  "line_items": [
+    {
+      "id": 0,
+      "admin_graphql_api_id": "gid://shopify/LineItem/0",
+      "fulfillable_quantity": 1,
+      "fulfillment_status": null,
+      "name": "Plov (test item)",
+      "price": "10.00",
+      "quantity": 1,
+      "requires_shipping": true,
+      "title": "Plov (test item)"
+    }
+  ],
+  "shipping_address": {
+    "first_name": "Test",
+    "last_name": "Buyer",
+    "address1": "1 Test Street",
+    "city": "Testville",
+    "country_code": "US",
+    "zip": "10001"
+  },
+  "shipping_lines": [
+    { "code": "ravon-local", "price": "2.00", "title": "Ravon local delivery (simulated)" }
+  ]
+}
