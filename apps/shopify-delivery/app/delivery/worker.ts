@@ -47,6 +47,33 @@ async function main() {
 
   const pacer = new CostPacer({
     enabled: cfg.on("pacing"),
+    store: {
+      load: async (shop) => {
+        const r = await pool.query(
+          `SELECT available, maximum, restore_rate, observed_at, costs FROM throttle_state WHERE shop = $1`,
+          [shop],
+        );
+        const row = r.rows[0];
+        return row
+          ? {
+              bucket: { available: row.available, maximum: row.maximum, restoreRate: row.restore_rate, at: row.observed_at.getTime() },
+              costs: row.costs,
+            }
+          : null;
+      },
+      save: (shop, b, costs) => {
+        pool
+          .query(
+            `INSERT INTO throttle_state (shop, available, maximum, restore_rate, observed_at, costs)
+             VALUES ($1, $2, $3, $4, to_timestamp($5 / 1000.0), $6)
+             ON CONFLICT (shop) DO UPDATE SET available = EXCLUDED.available, maximum = EXCLUDED.maximum,
+               restore_rate = EXCLUDED.restore_rate, observed_at = EXCLUDED.observed_at, costs = EXCLUDED.costs
+             WHERE throttle_state.observed_at <= EXCLUDED.observed_at`,
+            [shop, b.available, b.maximum, b.restoreRate, b.at, costs],
+          )
+          .catch((err) => console.error("throttle_state save failed", err));
+      },
+    },
     record: (e) => {
       pool
         .query(

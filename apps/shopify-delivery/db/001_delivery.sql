@@ -228,3 +228,14 @@ DROP TRIGGER IF EXISTS jobs_enforce_transition ON jobs;
 CREATE TRIGGER jobs_enforce_transition
   BEFORE INSERT OR UPDATE OF status ON jobs
   FOR EACH ROW EXECUTE FUNCTION enforce_job_transition();
+
+-- The pacer's last view of each shop's cost bucket, so a restarted worker paces from
+-- where its predecessor left off instead of from nothing.
+CREATE TABLE IF NOT EXISTS throttle_state (
+  shop         text PRIMARY KEY,
+  available    double precision NOT NULL,
+  maximum      double precision NOT NULL,
+  restore_rate double precision NOT NULL,
+  observed_at  timestamptz NOT NULL,
+  costs        jsonb NOT NULL DEFAULT '{}'   -- last requestedQueryCost per operation
+);

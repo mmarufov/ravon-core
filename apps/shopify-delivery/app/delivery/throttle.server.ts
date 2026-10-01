@@ -8,7 +8,8 @@ import type { AdminGraphql, GraphqlResult } from "./admin.server";
 // that bucket, refilled at restoreRate since the last observation, and waits before a
 // request whose expected cost exceeds what the model says is available, instead of
 // sending it and being THROTTLED. Every response, throttled or not, resets the model to
-// what Shopify reported, so the model cannot drift far from the server's.
+// what Shopify reported, less the cost of requests this process still has in flight
+// (Shopify has already deducted those), so the model cannot drift far from the server's.
 
 export interface ThrottleEvent {
   shop: string;
@@ -21,16 +22,24 @@ export interface ThrottleEvent {
   waitMs: number;
 }
 
-interface Bucket {
+export interface Bucket {
   available: number;
   maximum: number;
   restoreRate: number;
   at: number;
 }
 
+// Where the model outlives the process. A worker restarted after a crash otherwise starts
+// blind and bursts into a bucket its predecessor had just drained.
+export interface BucketStore {
+  load(shop: string): Promise<{ bucket: Bucket; costs: Record<string, number> } | null>;
+  save(shop: string, b: Bucket, costs: Record<string, number>): void;
+}
+
 export interface PacerOptions {
   enabled: boolean;
   record?: (e: ThrottleEvent) => void;
+  store?: BucketStore;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -40,6 +49,10 @@ const realSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 export class CostPacer {
   private buckets = new Map<string, Bucket>();
   private lastCost = new Map<string, number>();
+  private inflight = new Map<string, number>();
+  private loaded = new Map<string, Promise<void>>();
+  // Shops this process has had a reply for. Until then a loaded model is provisional.
+  private seeded = new Set<string>();
   private readonly now: () => number;
   private readonly sleep: (ms: number) => Promise<void>;
 
@@ -68,8 +81,28 @@ export class CostPacer {
   // rather than all waking at once to the same refill.
   async acquire(shop: string, operation: string, cost: number): Promise<void> {
     if (!this.opts.enabled) return;
+    if (this.opts.store && !this.loaded.has(shop)) {
+      this.loaded.set(
+        shop,
+        this.opts.store.load(shop).then((saved) => {
+          if (!saved || this.buckets.has(shop)) return;
+          // Less a margin: requests the previous process had in flight when it died were
+          // charged by Shopify after its last save.
+          const b = saved.bucket;
+          this.buckets.set(shop, { ...b, available: b.available - 0.2 * b.maximum });
+          for (const [op, c] of Object.entries(saved.costs)) if (!this.lastCost.has(op)) this.lastCost.set(op, c);
+        }),
+      );
+    }
+    await this.loaded.get(shop);
+    // Until this process has a reply, one request goes out alone and its reply seeds the
+    // model; everything else waits for that rather than trusting a guess.
+    for (let waited = 0; !this.seeded.has(shop) && (this.inflight.get(shop) ?? 0) > 0 && waited < 10000; waited += 50) {
+      await this.sleep(50);
+    }
+    this.inflight.set(shop, (this.inflight.get(shop) ?? 0) + cost);
     const b = this.buckets.get(shop);
-    if (!b) return; // nothing observed yet; the first response seeds the model
+    if (!b) return;
     const avail = this.projected(shop)!;
     b.available = avail - cost;
     b.at = this.now();
@@ -88,19 +121,24 @@ export class CostPacer {
     await this.sleep(waitMs);
   }
 
-  observe(shop: string, operation: string, res: GraphqlResult): void {
+  // `reserved` is what acquire() took for this request; it is no longer in flight.
+  observe(shop: string, operation: string, res: GraphqlResult, reserved = 0): void {
+    if (this.opts.enabled) this.inflight.set(shop, Math.max(0, (this.inflight.get(shop) ?? 0) - reserved));
     const cost = res.extensions?.cost;
     if (cost?.requestedQueryCost !== undefined) {
       this.lastCost.set(operation, cost.requestedQueryCost);
     }
     const t = cost?.throttleStatus;
     if (t) {
-      this.buckets.set(shop, {
-        available: t.currentlyAvailable,
+      const b = {
+        available: t.currentlyAvailable - (this.inflight.get(shop) ?? 0),
         maximum: t.maximumAvailable,
         restoreRate: t.restoreRate,
         at: this.now(),
-      });
+      };
+      this.buckets.set(shop, b);
+      this.seeded.add(shop);
+      this.opts.store?.save(shop, b, Object.fromEntries(this.lastCost));
     }
   }
 
@@ -142,8 +180,14 @@ export async function paced(
   for (let attempt = 1; ; attempt++) {
     const cost = pacer.estimate(operation, fallbackCost);
     await pacer.acquire(shop, operation, cost);
-    const res = await admin.request(query, variables);
-    pacer.observe(shop, operation, res);
+    let res: GraphqlResult;
+    try {
+      res = await admin.request(query, variables);
+    } catch (e) {
+      pacer.observe(shop, operation, {}, cost);
+      throw e;
+    }
+    pacer.observe(shop, operation, res, cost);
     if (!isThrottled(res)) return res;
     const t = res.extensions?.cost?.throttleStatus;
     const waitMs = pacer.enabled ? Math.max(pacer.waitFor(shop, cost), 50) : 1000;
