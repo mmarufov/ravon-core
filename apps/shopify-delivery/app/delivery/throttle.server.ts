@@ -54,6 +54,7 @@ export class CostPacer {
   private lastCost = new Map<string, number>();
   private inflight = new Map<string, number>();
   private loaded = new Map<string, Promise<void>>();
+  private gates = new Map<string, Promise<void>>();
   // Shops this process has had a reply for. Until then a loaded model is provisional.
   private seeded = new Set<string>();
   private readonly now: () => number;
@@ -79,9 +80,11 @@ export class CostPacer {
     return Math.min(b.maximum, b.available + elapsed * b.restoreRate);
   }
 
-  // Reserve `cost` from the modelled bucket, waiting first if it is not there. The
-  // reservation is taken before the wait, so concurrent callers queue behind each other
-  // rather than all waking at once to the same refill.
+  // Wait until the modelled bucket holds `cost`, then reserve it. Callers for one shop go
+  // through a FIFO gate one at a time, and a waiter re-reads the model after every sleep,
+  // because a reply that lands during the sleep can lower it (Shopify reported less than
+  // the model assumed). Reserving only at the moment of sending keeps two waiters from
+  // both counting on the same refill.
   async acquire(shop: string, operation: string, cost: number): Promise<void> {
     if (!this.opts.enabled) return;
     if (this.opts.store && !this.loaded.has(shop)) {
@@ -98,30 +101,46 @@ export class CostPacer {
       );
     }
     await this.loaded.get(shop);
-    // Until this process has a reply, one request goes out alone and its reply seeds the
-    // model; everything else waits for that rather than trusting a guess.
-    for (let waited = 0; !this.seeded.has(shop) && (this.inflight.get(shop) ?? 0) > 0 && waited < 10000; waited += 50) {
-      await this.sleep(50);
+
+    const prev = this.gates.get(shop) ?? Promise.resolve();
+    let release!: () => void;
+    const mine = new Promise<void>((r) => (release = r));
+    this.gates.set(shop, prev.then(() => mine));
+    await prev;
+    try {
+      // Until this process has a reply, one request goes out alone and its reply seeds
+      // the model; everything else waits for that rather than trusting a guess.
+      for (let waited = 0; !this.seeded.has(shop) && (this.inflight.get(shop) ?? 0) > 0 && waited < 10000; waited += 50) {
+        await this.sleep(50);
+      }
+      const b = this.buckets.get(shop);
+      if (b) {
+        let avail = this.projected(shop)!;
+        if (avail < cost) {
+          this.opts.record?.({
+            shop,
+            operation,
+            kind: "paced",
+            requestedCost: cost,
+            available: avail,
+            maximum: b.maximum,
+            restoreRate: b.restoreRate,
+            waitMs: ((cost - avail) / b.restoreRate) * 1000,
+          });
+          while (avail < cost) {
+            const nb = this.buckets.get(shop)!;
+            await this.sleep(Math.max(5, ((cost - avail) / nb.restoreRate) * 1000));
+            avail = this.projected(shop)!;
+          }
+        }
+        const cur = this.buckets.get(shop)!;
+        cur.available = avail - cost;
+        cur.at = this.now();
+      }
+      this.inflight.set(shop, (this.inflight.get(shop) ?? 0) + cost);
+    } finally {
+      release();
     }
-    this.inflight.set(shop, (this.inflight.get(shop) ?? 0) + cost);
-    const b = this.buckets.get(shop);
-    if (!b) return;
-    const avail = this.projected(shop)!;
-    b.available = avail - cost;
-    b.at = this.now();
-    if (avail >= cost) return;
-    const waitMs = ((cost - avail) / b.restoreRate) * 1000;
-    this.opts.record?.({
-      shop,
-      operation,
-      kind: "paced",
-      requestedCost: cost,
-      available: avail,
-      maximum: b.maximum,
-      restoreRate: b.restoreRate,
-      waitMs,
-    });
-    await this.sleep(waitMs);
   }
 
   // `reserved` is what acquire() took for this request; it is no longer in flight.

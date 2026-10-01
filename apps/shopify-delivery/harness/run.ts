@@ -11,6 +11,7 @@
 // the fake Shopify, then drives orders through and checks the pre-registered targets.
 // A negative control passes only if it shows the failure its mechanism prevents.
 
+import { execSync } from "node:child_process";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
@@ -528,7 +529,20 @@ async function main() {
     );
     for (const f of r.failures) console.log(`  - ${f}`);
   }
-  if (out) writeFileSync(out, JSON.stringify({ at: new Date().toISOString(), seed, results }, null, 2));
+  if (out) {
+    const sh = (c: string) => execSync(c, { encoding: "utf8" }).trim();
+    const provenance = {
+      sha: sh("git rev-parse HEAD"),
+      dirty: sh("git status --porcelain -- .") !== "",
+      at: new Date().toISOString(),
+      machine: process.env.GITHUB_ACTIONS
+        ? `GitHub Actions ${process.env.RUNNER_OS} runner (${sh("nproc 2>/dev/null || echo ?")} cpus), run ${process.env.GITHUB_RUN_ID}`
+        : sh("sysctl -n machdep.cpu.brand_string 2>/dev/null || uname -m"),
+      node: process.version,
+      shopify: "fake (harness/fake-shopify.ts); couriers simulated",
+    };
+    writeFileSync(out, JSON.stringify({ provenance, command: process.argv.join(" "), seed, results }, null, 2));
+  }
   const failed = results.filter((r) => !r.passed);
   console.log(`\n${results.length - failed.length}/${results.length} scenarios passed`);
   process.exit(failed.length ? 1 : 0);

@@ -528,6 +528,14 @@ jobs:
           RAVON_DISPATCH_URL: http://127.0.0.1:18480
         run: npx tsx harness/run.ts --scenario all --log-dir /tmp --out /tmp/harness-results.json
 
+      - name: Harness results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shopify-harness-results
+          path: /tmp/harness-results.json
+          if-no-files-found: ignore
+
       - name: Harness logs
         if: always()
         run: |
