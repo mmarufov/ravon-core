@@ -1,4 +1,7 @@
+# macOS
 .DS_Store
+
+# Swift Package Manager and Xcode
 /.build
 /Packages
 xcuserdata/
@@ -6,8 +9,22 @@ DerivedData/
 .swiftpm/configuration/registries.json
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
 .netrc
+
+# Swift build output inside ml/export
+ml/export/.build/
+
+# Python
+__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/
+.hypothesis/
+
+# Local agent and tool state
 .context/
 .gstack/
+.tools/
+.playwright-mcp/
 
 # Secrets & local config — never commit credentials
 .env
@@ -20,18 +37,3 @@ Config.local.xcconfig
 GoogleService-Info.plist
 service_role*
 *service_role*
-
-# Python build artifacts (ml/)
-*.egg-info/
-__pycache__/
-.venv/
-
-# Swift build output inside ml/export
-ml/export/.build/
-
-# Ledger test harness — local only
-db/ledger/.venv/
-db/ledger/.hypothesis/
-db/ledger/**/__pycache__/
-db/ledger/.pytest_cache/
-.tools/
