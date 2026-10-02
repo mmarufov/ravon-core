@@ -1,5 +1,7 @@
 # The reconstructed schema — reconciliation of three independent sources
 
+> Line citations into `SupabaseService.swift` point at it [as of c08f918](https://github.com/mmarufov/ravon-core/blob/c08f918/Sources/RavonCore/Services/SupabaseService.swift), before it was split by domain into `SupabaseService+<Domain>.swift`.
+
 Per-column detail lives in the three source documents; this document does the **reconciliation**:
 what the sources disagree about, what only one source knows, what is unknowable, and what the
 rebuild must therefore decide. Re-typing 265 columns here would add a fourth source to disagree

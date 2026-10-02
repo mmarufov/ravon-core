@@ -1,5 +1,7 @@
 # Dispatch engine — portable specification, verified empirically
 
+> Line citations into `SupabaseService.swift` point at it [as of c08f918](https://github.com/mmarufov/ravon-core/blob/c08f918/Sources/RavonCore/Services/SupabaseService.swift), before it was split by domain into `SupabaseService+<Domain>.swift`.
+
 **Target:** a Kotlin reimplementation that (a) serves the `Assign` RPC, (b) carries the
 simulator across as its test harness, (c) can be held to the numbers the Swift version
 produces today.

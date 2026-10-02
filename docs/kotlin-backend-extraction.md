@@ -1,5 +1,7 @@
 # Kotlin backend — the plan
 
+> Line citations into `SupabaseService.swift` point at it [as of c08f918](https://github.com/mmarufov/ravon-core/blob/c08f918/Sources/RavonCore/Services/SupabaseService.swift), before it was split by domain into `SupabaseService+<Domain>.swift`.
+
 **Status:** written 2026-09-16, before any service code. Phase 1 (dispatch) has since been
 built and is marked ✅ below; for the current state see
 [ADR 0005](adr/0005-extract-to-kotlin-not-rewrite.md#verification).

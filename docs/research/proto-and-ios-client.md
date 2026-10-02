@@ -1,5 +1,7 @@
 # `proto/` contract, CI compatibility gate, and Connect-Swift integration
 
+> Line citations into `SupabaseService.swift` point at it [as of c08f918](https://github.com/mmarufov/ravon-core/blob/c08f918/Sources/RavonCore/Services/SupabaseService.swift), before it was split by domain into `SupabaseService+<Domain>.swift`.
+
 Scope: Part A — the proto layout and every shared type decision. Part B — the `buf` gate,
 verified against the live buf docs (not memory). Part C — concrete SwiftPM integration for
 Connect-Swift in RavonCore.

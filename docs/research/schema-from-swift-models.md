@@ -1,5 +1,7 @@
 # Postgres schema reconstructed from the RavonCore Swift Codable models
 
+> Line citations into `SupabaseService.swift` point at it [as of c08f918](https://github.com/mmarufov/ravon-core/blob/c08f918/Sources/RavonCore/Services/SupabaseService.swift), before it was split by domain into `SupabaseService+<Domain>.swift`.
+
 Scope: all 21 files in `Sources/RavonCore/Models/`, cross-referenced against
 `db/migrations/01–19` and `Sources/RavonCore/Services/`.
 

@@ -2,11 +2,12 @@
 -- the apps call that exist in NO migration anywhere.
 --
 -- `get_merchant_stats`, `find_nearby_couriers` and `add_tip` were
--- dashboard-created: they are called from Swift (SupabaseService.swift:1453,
--- :711, :663) and their definitions are permanently gone. Everything below for
--- those three is a RECONSTRUCTION from the call site and the decoded shape, not
--- a recovery. Their signatures and return shapes are pinned by the Swift side,
--- so those are certain; the bodies are a decision.
+-- dashboard-created: they are called from Swift
+-- (SupabaseService+Restaurants.swift:257, SupabaseService+Courier.swift:229,
+-- SupabaseService+Orders.swift:214) and their definitions are permanently gone.
+-- Everything below for those three is a RECONSTRUCTION from the call site and
+-- the decoded shape, not a recovery. Their signatures and return shapes are
+-- pinned by the Swift side, so those are certain; the bodies are a decision.
 
 -- ---------------------------------------------------------------------------
 -- cancel_order_by_consumer

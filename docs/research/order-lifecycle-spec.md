@@ -1,5 +1,7 @@
 # Order Lifecycle — Portable Specification
 
+> Line citations into `SupabaseService.swift` point at it [as of c08f918](https://github.com/mmarufov/ravon-core/blob/c08f918/Sources/RavonCore/Services/SupabaseService.swift), before it was split by domain into `SupabaseService+<Domain>.swift`.
+
 Extracted from:
 - `/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/Sources/RavonCore/Models/OrderLifecycle.swift` (429 lines)
 - `/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/Sources/RavonCore/Models/Order.swift` (`OrderStatus`, lines 3-117)

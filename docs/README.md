@@ -29,7 +29,9 @@ behind published numbers.
 
 These are point-in-time records. They keep the numbers and file references of the tree
 they were written against, including paths on the author's machine and `.context/`
-working files that are not in this repository.
+working files that are not in this repository. Their line citations into
+`SupabaseService.swift` are pinned to c08f918, the last commit before it was split by
+domain.
 
 - [kotlin-backend-extraction.md](kotlin-backend-extraction.md): the plan for extracting
   the service tier, with progress marked.

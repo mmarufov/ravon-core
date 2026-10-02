@@ -1,5 +1,7 @@
 # SQL function catalogue — `db/migrations/01–19`
 
+> Line citations into `SupabaseService.swift` point at it [as of c08f918](https://github.com/mmarufov/ravon-core/blob/c08f918/Sources/RavonCore/Services/SupabaseService.swift), before it was split by domain into `SupabaseService+<Domain>.swift`.
+
 Compiled 2026-09-16 by direct read of all 19 migration files (2,555 lines) plus the
 21 Swift `rpc(...)` call sites. Every claim below cites `file:line`. Nothing here is
 inferred from the inventory doc; where the inventory disagrees it is called out.

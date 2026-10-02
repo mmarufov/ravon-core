@@ -1,5 +1,7 @@
 # Security by construction — translating the two gstack reports into rebuild invariants
 
+> Line citations into `SupabaseService.swift` point at it [as of c08f918](https://github.com/mmarufov/ravon-core/blob/c08f918/Sources/RavonCore/Services/SupabaseService.swift), before it was split by domain into `SupabaseService+<Domain>.swift`. Likewise [`RavonConfig.swift`](https://github.com/mmarufov/ravon-core/blob/c08f918/Sources/RavonCore/Services/RavonConfig.swift), now `Sources/RavonCore/RavonCore.swift`.
+
 Scope: both files in `.gstack/security-reports/` read in full, all 19 files in
 `db/migrations/`, `Sources/RavonCore/Services/*`, `scripts/scan_secrets.py`,
 `.github/workflows/ci.yml`. Every claim below is cited to `file:line`. Where the answer

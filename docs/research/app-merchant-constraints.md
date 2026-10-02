@@ -1,5 +1,7 @@
 # Merchant app — constraints on a Kotlin backend extraction
 
+> Line citations into `SupabaseService.swift` point at it [as of c08f918](https://github.com/mmarufov/ravon-core/blob/c08f918/Sources/RavonCore/Services/SupabaseService.swift), before it was split by domain into `SupabaseService+<Domain>.swift`.
+
 **Source of record:** `/Users/mmarufov/conductor/workspaces/ravon-merchant/milan`
 (branch `mmarufov/milan-v1`, HEAD `d0842d6`).
 **Input brief:** `/Users/mmarufov/conductor/workspaces/ravon-merchant/milan/.context/STATE-REPORT.md` (23 KB, 2026-09-15).

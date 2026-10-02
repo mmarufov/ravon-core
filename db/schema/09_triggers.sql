@@ -160,7 +160,7 @@ CREATE TRIGGER orders_sync_delivery_mode
 -- order_status_history — the audit trail, appended by trigger only.
 --
 -- The table had ZERO SQL evidence in the corpus: none of the 13 transition RPCs
--- wrote to it, yet the consumer app reads it (SupabaseService.swift:293). Either
+-- wrote to it, yet the consumer app reads it (SupabaseService+Orders.swift:25). Either
 -- a dashboard-created trigger did this, or the history was always empty and the
 -- screen always blank. Appending here rather than in each RPC means no
 -- transition can forget, and because clients hold no INSERT grant on the table
@@ -224,7 +224,7 @@ CREATE TRIGGER chat_messages_set_sender_role
 -- ===========================================================================
 -- updated_at maintenance. Swift decodes `orders.updated_at` and
 -- `profiles.updated_at` as non-optional Date, and `.order("updated_at")` at
--- SupabaseService.swift:817 sorts the courier's active order on it.
+-- SupabaseService+Courier.swift:335 sorts the courier's active order on it.
 -- ===========================================================================
 CREATE OR REPLACE FUNCTION public.ravon_touch_updated_at()
 RETURNS trigger

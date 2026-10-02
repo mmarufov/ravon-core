@@ -5,15 +5,15 @@
 --
 -- The report found `restaurant-images` and `menu-item-images` with
 -- `file_size_limit IS NULL` and `allowed_mime_types IS NULL`, verified by live
--- query, so the ONLY validation was client-side (SupabaseService.swift:1393
+-- query, so the ONLY validation was client-side (SupabaseService+Images.swift:7
 -- 5 MB + a filename-extension allowlist) and bypassable by calling the Storage
 -- API directly with the anon key.
 --
 -- The finding was also incomplete: there is a THIRD bucket, `delivery-proofs`
--- (:623), with a client-only 500 KB check at :620 and a comment at :617
--- conceding "server-side check is added in v2". Neither report covers it, and it
--- is the one that matters most, because a delivery proof is evidence in a
--- payment dispute.
+-- (SupabaseService+Courier.swift:179), with a client-only 500 KB check at :176
+-- and a comment at :173 conceding "server-side check is added in v2". Neither
+-- report covers it, and it is the one that matters most, because a delivery
+-- proof is evidence in a payment dispute.
 --
 -- Limits mirror the client's intent so no working upload breaks. Note the MIME
 -- list is what the SERVER enforces on the declared content-type; a filename

@@ -1,5 +1,7 @@
 # Consumer app (DuDash) — constraints on the Kotlin backend extraction plan
 
+> Line citations into `SupabaseService.swift` point at it [as of c08f918](https://github.com/mmarufov/ravon-core/blob/c08f918/Sources/RavonCore/Services/SupabaseService.swift), before it was split by domain into `SupabaseService+<Domain>.swift`.
+
 Source: `/Users/mmarufov/conductor/workspaces/ravon-consumer/kolkata/.context/STATE-REPORT.md`
 (32,822 bytes, read in full) + that repo's `CLAUDE.md`.
 

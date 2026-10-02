@@ -1,5 +1,7 @@
 # Postgres schema reconstructed from `db/migrations/01..19`
 
+> Line citations into `SupabaseService.swift` point at it [as of c08f918](https://github.com/mmarufov/ravon-core/blob/c08f918/Sources/RavonCore/Services/SupabaseService.swift), before it was split by domain into `SupabaseService+<Domain>.swift`.
+
 Source of truth for this document: the 19 `.sql` files plus `README.md` in
 `/Users/mmarufov/conductor/workspaces/ravon-core/bucharest/db/migrations/`.
 Every claim below cites `file:line`. Citations use the short form `NN:L`
