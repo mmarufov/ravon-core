@@ -322,7 +322,8 @@ and execution environments.
 
 ---
 
-Built by [Muhammadjon Marufov](https://github.com/mmarufov).
+Built by [Muhammadjon Marufov](https://github.com/mmarufov). Released under the
+[MIT License](LICENSE).
 
 <div align="center">
 <br />
