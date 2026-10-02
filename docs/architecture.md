@@ -3,9 +3,11 @@
 One diagram. It is deliberately small enough to redraw on a whiteboard in five minutes,
 because that is what it is for.
 
-**Solid lines exist today. Dashed lines do not** — the service tier is in extraction and
-the Supabase project behind the right-hand side has been deleted. See
-[what is real](../README.md#whats-real-whats-simulated-whats-not-built).
+**Solid lines exist today. Dashed lines do not.** Of the service tier, only dispatch is
+built: it runs as the Kotlin service in `services/`, and the apps do not call it yet. The
+Supabase project behind the right-hand side has been deleted, and its schema is rebuilt
+in `db/schema/`. The [README's architecture section](../README.md#architecture) shows
+what exists today.
 
 ```mermaid
 flowchart TB
@@ -23,7 +25,7 @@ flowchart TB
 
     subgraph trusted["Trusted — server-side, holds credentials clients never see"]
         direction TB
-        SVC["<b>Service tier</b> (Kotlin, in extraction)<br/>dispatch · order saga · ledger · fraud"]
+        SVC["<b>Service tier</b> (Kotlin, dispatch built)<br/>dispatch · order saga · ledger · fraud"]
         PG[("<b>PostgreSQL</b><br/>RLS · pg_cron · PostGIS<br/>append-only transition log")]
         RT["Realtime<br/>(Postgres CDC → WebSocket)"]
         AUTH["Supabase Auth<br/>email OTP · JWT"]
@@ -64,11 +66,11 @@ them buys nothing. This is what an incremental extraction looks like partway thr
 verifies it against Supabase's JWKS endpoint and connects to Postgres as its own role —
 not as the end user — which is how it can write rows clients cannot.
 
-**Dispatch does not belong on a phone.** It currently lives in `Sources/RavonCore/Dispatch/`,
-which is a layering error stated plainly: a courier's phone cannot see the other couriers,
-and minimum-cost matching is meaningless without them. It sits there because that is where
-it could be built and measured; it is the first thing that moves. See
-[ADR 0005](adr/0005-extract-to-kotlin-not-rewrite.md).
+**Dispatch does not belong on a phone.** It was first built in `Sources/RavonCore/Dispatch/`,
+which was a layering error stated plainly: a courier's phone cannot see the other couriers,
+and minimum-cost matching is meaningless without them. It sat there because that is where
+it could be built and measured, and it was the first thing to move. It now runs in
+`services/`, ported bit for bit. See [ADR 0005](adr/0005-extract-to-kotlin-not-rewrite.md).
 
 ## The five things to say out loud when drawing it
 

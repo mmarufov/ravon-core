@@ -568,7 +568,7 @@ Tables listed under WRITES include writes performed by helper functions the body
 | `LANGUAGE plpgsql` | **30** | the rest |
 | `search_path = public, extensions` | **3** | `compute_eta_minutes`, `update_courier_heartbeat`, `fetch_available_orders` (the PostGIS callers) |
 
-`db/migrations/README.md:138-141` claims the 5 `search_path`-less helpers were tightened
+`db/migrations/README.md:143-146` claims the 5 `search_path`-less helpers were tightened
 post-hoc with `ALTER FUNCTION ... SET search_path = public` to clear the
 `function_search_path_mutable` lint. That `ALTER` exists in **no migration file**, so whether
 it was ever applied is **UNKNOWN — needs live introspection**. The Kotlin/SQL rebuild should

@@ -105,6 +105,9 @@ it is not applied here because this ADR is documentation-only.
 
 ## Verification
 
-`swift test --filter 'Dispatch'` — includes `test_simulationIsReproducible`, which asserts
-identical assignment counts, mean delivery time, travel and per-courier job counts across
-two runs of the same seed.
+`./gradlew :dispatch:test --tests '*DispatchBaselineTest'` from `services/` — includes
+`simulation is reproducible`, which asserts identical assignment counts, mean delivery
+time, travel and per-courier job counts across two runs of the same seed. It is the Kotlin
+port of the Swift `test_simulationIsReproducible`, deleted with the Swift engine in #12.
+The same suite replays the baseline recorded from the Swift simulator and requires every
+number to match bit for bit.

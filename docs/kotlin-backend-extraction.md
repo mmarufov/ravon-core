@@ -1,6 +1,8 @@
 # Kotlin backend — the plan
 
-**Status:** planning only. No service code written. 2026-09-16.
+**Status:** written 2026-09-16, before any service code. Phase 1 (dispatch) has since been
+built and is marked ✅ below; for the current state see
+[ADR 0005](adr/0005-extract-to-kotlin-not-rewrite.md#verification).
 **Brief:** `.context/PROMPT-kotlin-backend.md`. **Evidence:** `.context/research/` (15 documents, ~13121 lines, every claim cited to file:line), plus two generated fixtures: `dispatch-baseline-seeds-1-30.json` and `dispatch-rng-golden-vectors.json`. The orchestrator's own first-hand checks are in `.context/research/orchestrator-verification-log.md`.
 
 This plan disagrees with the brief in several places. Each disagreement is stated where it lands, with the evidence, and collected in §0 so nothing is buried.

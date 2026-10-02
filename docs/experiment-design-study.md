@@ -1,7 +1,8 @@
 # Experiment design under interference — measuring the bias of A/B designs
 
-`Sources/RavonCore/Dispatch/{SwitchbackExperiment,DispatchZone}.swift` — 7 tests.
-Decision recorded in [ADR 0004](adr/0004-zone-partitioning.md).
+`services/dispatch/` (`SwitchbackExperiment.kt`, `DispatchZone.kt`) — 7 tests. Ported
+from the Swift originals this study measured, which were deleted in #12 and are last
+present at 38f29c9. Decision recorded in [ADR 0004](adr/0004-zone-partitioning.md).
 
 **The result was not the one expected going in**, and the negative result is the part
 worth reading.
@@ -81,7 +82,7 @@ markets into zones — beyond making the optimisation tractable, it is what make
 optimisation **measurable**.
 
 The parenthesised ranges on the naive rows are not sampling noise in the usual sense; see
-[Reproducibility caveat](#reproducibility-caveat-a-real-defect) below.
+[Reproducibility caveat](#reproducibility-caveat--a-real-defect) below.
 
 ## Three things that cut against that headline
 
@@ -142,6 +143,10 @@ The existing `test_armAssignmentIsDeterministic` does not catch this: it checks 
 derive entity IDs from the seeded RNG. It is not applied here because this write-up is
 documentation-only.
 
+The Kotlin port has since fixed it: `MarketplaceSimulator.kt` derives order and courier
+IDs from their index (`stableId`), so the naive design's arm split is now reproducible
+from the seed. The figures above come from the Swift original and were not re-measured.
+
 ## What to say about it
 
 > "I wanted to test a dispatch change, and the naive approach — randomise orders into two
@@ -177,8 +182,10 @@ it was measured and the reasoning survived being wrong once.
 
 ## Reproducing this
 
+From `services/`:
+
 ```bash
-swift test --filter 'Switchback'    # 7 tests
+./gradlew :dispatch:test --tests '*SwitchbackExperimentTest'    # 7 tests
 ```
 
 The tests assert properties — bias above 10 points unpartitioned, below 6 partitioned, at

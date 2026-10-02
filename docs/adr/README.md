@@ -10,9 +10,10 @@ test suite.
 | [0002](0002-min-cost-matching-over-greedy.md) | Solve dispatch as minimum-cost matching, and do not minimise distance | Accepted |
 | [0003](0003-deterministic-simulation-as-evaluation.md) | Evaluate dispatch by deterministic simulation, with latent state | Accepted |
 | [0004](0004-zone-partitioning.md) | Partition the market into zones: tractability *and* measurability, at a real cost | Accepted |
-| [0005](0005-extract-to-kotlin-not-rewrite.md) | Extract a Kotlin service tier; do not rewrite the backend | **Proposed — not built** |
+| [0005](0005-extract-to-kotlin-not-rewrite.md) | Extract a Kotlin service tier; do not rewrite the backend | Accepted — Phase 1 (dispatch) built |
 | [0006](0006-postgres-over-kafka.md) | Implement the event guarantees on Postgres, not on Kafka | Accepted |
 | [0007](0007-rejected-technologies.md) | Technologies deliberately not used, and what would change that | Accepted |
+| [0008](0008-proto-contract-and-compatibility-gate.md) | The `.proto` files are the contract, and a gate enforces it | Accepted |
 
 ## Template
 
