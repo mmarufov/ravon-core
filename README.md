@@ -2,7 +2,7 @@
 
 # Ravon
 
-**The food-delivery platform built for the dinner rush.**
+**The delivery platform**
 
 Smart dispatch · Native iOS · Transactional checkout · Payout recovery
 
