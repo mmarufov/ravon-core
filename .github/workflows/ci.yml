@@ -476,3 +476,17 @@ jobs:
       # than grepping for a word that legitimately appears in .gitignore and docs.
       - name: Reject service_role keys and Supabase PATs
         run: python3 scripts/scan_secrets.py .
+
+  docs-links:
+    name: Markdown links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Moving a file or rewording a heading breaks every link to it, and nothing else
+      # fails. This resolves each relative link and #anchor in every tracked .md file
+      # against the tracked tree, case-sensitively, the way GitHub renders them.
+      - name: Relative links and anchors resolve
+        run: python3 scripts/check_links.py
+
+      - name: Link checker self-test
+        run: python3 scripts/check_links.py --self-test
