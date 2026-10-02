@@ -6,8 +6,8 @@ import java.util.UUID
  * Deterministic discrete-event marketplace simulator.
  *
  * Port of Sources/RavonCore/Dispatch/MarketplaceSimulator.swift. Verified against
- * `Tests/RavonCoreTests/Fixtures/dispatch-baseline.json` — 30 seeds × 2 dispatchers ×
- * 11 metrics, recorded from the Swift original before this port existed.
+ * `src/test/resources/dispatch-baseline.json` — 30 seeds × 2 dispatchers × 11 metrics,
+ * recorded from the Swift original before this port existed.
  *
  * Three things are load-bearing for that verification and must not be "tidied":
  *
