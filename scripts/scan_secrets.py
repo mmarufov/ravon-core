@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail the build if a privileged credential is committed.
 
-Grepping for the string `service_role` is useless here: .gitignore, CLAUDE.md and
+Grepping for the string `service_role` is useless here: .gitignore, AGENTS.md and
 README.md all mention it legitimately, and a real leaked key does not contain the
 word at all -- it is a JWT whose *decoded payload* carries {"role": "service_role"}.
 
