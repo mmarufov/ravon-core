@@ -460,12 +460,12 @@ portfolio review, and the port should drop it.
 
 ### 5a. The stated policy, verbatim
 
-`migrations/README.md:3-4`:
+`migrations/README.md:8-9`:
 
 > Apply in numeric order against the Supabase project (`milan` / production).
 > All migrations are idempotent (use `IF NOT EXISTS` and `CREATE OR REPLACE`).
 
-Application mechanism, `migrations/README.md:88-94`:
+Application mechanism, `migrations/README.md:93-99`:
 
 > ```
 > mcp__supabase__apply_migration  name="08_courier_heartbeat..."  query=<SQL>
@@ -558,7 +558,7 @@ Five collisions, in descending severity:
    write the `cron.unschedule` migration, and nothing currently anticipates it.
 
 **One more policy detail that must not survive, for a different reason.**
-`migrations/README.md:3` names the target as "the Supabase project (`milan` / production)".
+`migrations/README.md:8` names the target as "the Supabase project (`milan` / production)".
 `CLAUDE.md`/`AGENTS.md` require that "The Supabase project URL and keys must stay out of tracked
 docs and source." A project alias is not a URL or a key, so this is not a violation — but it is a
 tracked doc naming production infrastructure, and the named infrastructure **does not exist**
@@ -641,7 +641,7 @@ a library — a structural fork.
   `14_courier_escalation_ladder_cron.sql:121` `courier_escalation_ladder` `* * * * *`;
   `16_no_show_and_restaurant_delay.sql:146` `mark_no_show_deliveries` `* * * * *`.
   `12`'s own list at `:52-53` includes `activate_scheduled_orders` as a scheduled worker, so the
-  doc contradicts itself two paragraphs apart. `migrations/README.md:135-136` also only asks the
+  doc contradicts itself two paragraphs apart. `migrations/README.md:140-141` also only asks the
   operator to verify **two** of the five.
 
 ### C-8 `[doc↔repo]` — the iOS 26.2 divergence is fleet-wide, not consumer-only
@@ -728,7 +728,7 @@ delivery-time result and `08:89`'s ground-truth-lift result are protected by **n
 
 ### C-17 `[doc↔repo]` — `migrations/README.md` targets a project that does not exist
 
-- `migrations/README.md:3` — "Apply in numeric order against the Supabase project (`milan` /
+- `migrations/README.md:8` — "Apply in numeric order against the Supabase project (`milan` /
   production)"; `:42-43` — "Apply them once in **Supabase → Authentication** for the production
   project."
 - Orchestrator-established: no Ravon Supabase project exists in the account;
@@ -819,7 +819,7 @@ delivery-time result and `08:89`'s ground-truth-lift result are protected by **n
    source is migrations ∪ Swift models ∪ Swift call sites; `scripts/schema_drift.py` reports 0
    drift with **15 unverified findings**, so 15 questions are open by construction.
 7. **Where does the dashboard-only auth config live after Phase 0?** UNKNOWN — it cannot go in a
-   migration (`migrations/README.md:42-43`) and `10`'s layout has no slot for it.
+   migration (`migrations/README.md:47-48`) and `10`'s layout has no slot for it.
 8. **Credentials hardcoded "in three places, in three different shapes"** (`02:94`) — not
    re-verified here; I deliberately did not grep app repos for key material.
 9. **`ravonGray`'s value** is undocumented (`README.md:278` shows "—"), which matters if

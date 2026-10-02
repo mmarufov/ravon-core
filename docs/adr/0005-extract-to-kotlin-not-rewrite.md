@@ -1,7 +1,7 @@
 # 0005 — Extract a Kotlin service tier; do not rewrite the backend
 
-**Status:** Proposed · 2026-09-16 — **nothing in this ADR is built.** There is no
-`services/` directory in this repo.
+**Status:** Accepted · 2026-09-17 (proposed 2026-09-16). Phase 1 is built; Phases 2 and
+3 are not. See [Verification](#verification).
 **Scope:** whole-system
 
 ## Context
@@ -120,5 +120,17 @@ one of the two.
 
 ## Verification
 
-None. This ADR describes work that has not been done. The status line stays **Proposed**
-until `services/` exists and builds.
+When this was written there was nothing to verify, and the status line was to stay
+**Proposed** until `services/` existed and built. It has done both since #12
+(2026-09-17).
+
+**Phase 1, dispatch.** `./gradlew :dispatch:test :server:test` from `services/`, run by the
+required CI job `dispatch-quality`. The port replays the baseline recorded from the Swift
+simulator bit for bit, the Swift copy was deleted in #12, and the `Assign` RPC has been
+served over gRPC, gRPC-Web and JSON since #13. The `proto/` compatibility gate from
+Phase 0 is [ADR 0008](0008-proto-contract-and-compatibility-gate.md).
+
+**Phases 2 and 3 are not built.** The ledger exists as PostgreSQL in `db/ledger/`, and
+`db/ledger/HANDOFF-for-kotlin.md` is the contract a Kotlin service would wrap, but no
+service wraps it yet. There is no Kotlin order service; checkout still runs as the SQL
+`create_order` in `db/schema/`.

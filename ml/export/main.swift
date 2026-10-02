@@ -5,10 +5,11 @@ import Foundation
 // This is a *one-shot* bridge. `ml/` is required to run with no Swift toolchain at all,
 // so the contract is: this executable writes `ml/data/orders.csv.gz` and
 // `ml/data/meta.json`, both committed, and nothing downstream ever imports RavonCore.
-// The Kotlin extraction happening in parallel can delete or move the simulator without
-// breaking the ML layer.
+// The Kotlin extraction has since deleted the Swift simulator from `Sources/`, and the
+// Python layer kept working, which is the point of that contract.
 //
-// Build + run with `ml/export/export.sh`.
+// Build + run with `ml/export/export.sh`, which compiles this file against the simulator
+// as of the last commit that has it.
 
 // MARK: - Export configuration
 

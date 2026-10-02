@@ -1,5 +1,10 @@
 # Federated Umbrella migrations
 
+> **Historical record. Do not apply.** These migrations patched the original Supabase
+> project, which has since been deleted. They are not a rebuild source: only 1 of the 15
+> tables the apps touch was ever created here. The database is defined in
+> [`db/schema/`](../schema/README.md); the rest of this file is unchanged from that time.
+
 Apply in numeric order against the Supabase project (`milan` / production).
 All migrations are idempotent (use `IF NOT EXISTS` and `CREATE OR REPLACE`).
 

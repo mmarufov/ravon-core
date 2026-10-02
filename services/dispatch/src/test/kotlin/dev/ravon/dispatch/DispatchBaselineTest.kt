@@ -3,7 +3,6 @@ package dev.ravon.dispatch
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
-import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -11,10 +10,10 @@ import kotlin.test.assertTrue
 /**
  * **The acceptance test for the Kotlin dispatch port.**
  *
- * `Tests/RavonCoreTests/Fixtures/dispatch-baseline.json` was recorded by compiling and
- * running the *Swift* engine before this port existed: 30 seeds × 2 dispatchers × 11
- * metrics, at the exact configuration `DispatchSimulationTests` uses (12 couriers, 240
- * orders, 180 minutes). The port is correct when every one of those 660 numbers matches.
+ * `src/test/resources/dispatch-baseline.json` was recorded by compiling and running the
+ * *Swift* engine before this port existed: 30 seeds × 2 dispatchers × 11 metrics, at the
+ * exact configuration `DispatchSimulationTests` uses (12 couriers, 240 orders, 180
+ * minutes). The port is correct when every one of those 660 numbers matches.
  *
  * Doubles are compared **bitwise**. A tolerance would let a subtly different simulation
  * pass, and the whole value of the fixture is that it cannot.
@@ -48,7 +47,7 @@ class DispatchBaselineTest {
     )
 
     private val baseline: Baseline = jacksonObjectMapper()
-        .readValue(Files.readString(Fixtures.path("dispatch-baseline.json")))
+        .readValue(Fixtures.read("dispatch-baseline.json"))
 
     private fun config(seed: Long, couriers: Int = 12) = MarketplaceSimulator.Config(
         seed = seed.toULong(),

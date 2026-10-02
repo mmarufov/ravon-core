@@ -349,7 +349,7 @@ Supabase's bootstrap `GRANT ALL ON SCHEMA public TO anon, authenticated` would p
 user can create a function or operator in `public` that an unqualified reference inside a
 definer function resolves to, executing attacker code as the function owner. Whether that
 grant existed is **UNKNOWN — needs live introspection**. The migrations' own hardening note
-(`db/migrations/README.md:138-141`) shows the author treated `search_path` as a
+(`db/migrations/README.md:143-146`) shows the author treated `search_path` as a
 lint item to satisfy (`function_search_path_mutable`) rather than as a privilege boundary;
 setting it to `public` satisfies the linter and preserves the hijack.
 

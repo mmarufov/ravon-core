@@ -1,7 +1,9 @@
 # The dispatch engine — design, results, and what they do not license you to claim
 
-`Sources/RavonCore/Dispatch/` — 6 files, 1,208 lines, 21 tests.
-Decisions recorded in [ADR 0002](adr/0002-min-cost-matching-over-greedy.md) and
+`services/dispatch/` (Kotlin), a bit-exact port of the Swift engine this study measured.
+That engine was `Sources/RavonCore/Dispatch/` (6 files, 1,208 lines, 21 tests), deleted
+in #12 and last present at 38f29c9. Decisions recorded in
+[ADR 0002](adr/0002-min-cost-matching-over-greedy.md) and
 [ADR 0003](adr/0003-deterministic-simulation-as-evaluation.md).
 
 **All numbers below are simulator output**, re-measured against the working tree of
@@ -146,17 +148,23 @@ passing.
   model input for this reason.
 - **Cost weights are chosen, not learned.** 1.5, 0.4, cap 25, 18 km/h, 8 km are a policy
   the simulator lets you measure, not a fact about Dushanbe.
-- **Not wired to the app.** This is the engine and its evaluation. Making it live needs a
-  `dispatch_tick` job and replacing `claim_order` with an offer/accept flow — and moving
-  it off the client, since a phone cannot see the fleet
-  ([ADR 0005](adr/0005-extract-to-kotlin-not-rewrite.md)).
+- **Not wired to the app.** This is the engine and its evaluation. It has moved off the
+  client into the Kotlin service, since a phone cannot see the fleet
+  ([ADR 0005](adr/0005-extract-to-kotlin-not-rewrite.md)), but making it live still
+  needs a `dispatch_tick` job and replacing `claim_order` with an offer/accept flow.
 
 ## Reproducing this
 
+From `services/`:
+
 ```bash
-swift test --filter 'Dispatch|Hungarian'     # 15 tests, the regression guards
-swift test --filter 'Switchback'             # 7 tests, the experiment-design study
+./gradlew :dispatch:test --tests '*HungarianSolverTest' --tests '*DispatchBaselineTest'  # 14 tests, the regression guards
+./gradlew :dispatch:test --tests '*SwitchbackExperimentTest'                              # 7 tests, the experiment-design study
 ```
+
+These are the Kotlin ports of the Swift suites this study ran, which were deleted with the
+Swift engine in #12. `DispatchBaselineTest` also replays the recorded Swift baseline and
+compares every number bit for bit.
 
 The tests assert *properties* (optimal never loses; the mean gain stays above 0.35; the
 advantage vanishes with surplus couriers) rather than exact numbers, so they survive

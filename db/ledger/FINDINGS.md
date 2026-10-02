@@ -39,7 +39,7 @@ it posts an unbalanced transaction *as the service role* and requires
 
 PostgreSQL grants `EXECUTE` on new functions to `PUBLIC` by default. Adding
 `SECURITY DEFINER` to five functions in §1 therefore handed `PUBLIC` the right to
-execute five `SECURITY DEFINER` functions — the exact finding shape CLAUDE.md
+execute five `SECURITY DEFINER` functions — the exact finding shape AGENTS.md
 records from this project's earlier security reports.
 
 For the four trigger functions the practical blast radius was nil, because

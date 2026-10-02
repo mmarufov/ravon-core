@@ -1,6 +1,6 @@
 """Who can reach the ledger.
 
-CLAUDE.md records that previous security reports on this project flagged
+AGENTS.md records that previous security reports on this project flagged
 anon-callable SECURITY DEFINER RPCs and over-broad UPDATE policies. Those are
 exactly the two ways a ledger like this one gets compromised, so both are tests
 rather than review items.
@@ -94,7 +94,7 @@ def test_untrusted_client_role_cannot_execute_the_posting_api(anon_dsn: str):
     """PostgreSQL grants EXECUTE to PUBLIC by default. Without the explicit
     REVOKE ... FROM PUBLIC in schema.sql, every one of these SECURITY DEFINER
     functions would be callable by an untrusted client role — which is the
-    finding shape CLAUDE.md warns about."""
+    finding shape AGENTS.md warns about."""
     with psycopg.connect(anon_dsn) as conn, conn.cursor() as cur:
         cur.execute("""
             SELECT p.proname, has_function_privilege(current_user, p.oid, 'EXECUTE')

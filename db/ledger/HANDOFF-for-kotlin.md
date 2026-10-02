@@ -131,8 +131,8 @@ So:
 ## 4. Error codes
 
 Every error follows the repo's existing RPC convention from
-`.context/migrations/13_*.sql`: **SQLSTATE `P0001`** with a jsonb `DETAIL`
-carrying `reason` and `http_status`, plus context fields.
+`db/migrations/13_courier_status_transition_rpcs_v2.sql`: **SQLSTATE `P0001`**
+with a jsonb `DETAIL` carrying `reason` and `http_status`, plus context fields.
 
 ```
 ERROR:  negative_balance_not_allowed

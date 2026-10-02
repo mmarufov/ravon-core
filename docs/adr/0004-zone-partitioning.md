@@ -131,9 +131,10 @@ demand density and road topology.
 
 ## Verification
 
-`swift test --filter 'Switchback'` — 7 tests, including
-`test_zonePartitioningCollapsesExperimentBias`, `test_biasDecreasesWithFinerPartitioning`
-and `test_switchbackAndNaiveAreComparableOnceZoned`, which pins the negative result so it
-cannot be quietly lost.
+`./gradlew :dispatch:test --tests '*SwitchbackExperimentTest'` from `services/` — 7 tests,
+including `zone partitioning collapses experiment bias`, `bias decreases with finer
+partitioning` and `switchback and naive are comparable once zoned`, which pins the
+negative result so it cannot be quietly lost. These are the Kotlin ports of the Swift
+tests, deleted with the Swift engine in #12.
 
 Full study: [docs/experiment-design-study.md](../experiment-design-study.md).

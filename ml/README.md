@@ -98,8 +98,8 @@ ml/
 ## The dataset
 
 `data/orders.csv.gz` — 48,000 orders across 200 simulated service days, exported once
-from `Sources/RavonCore/Dispatch/MarketplaceSimulator.swift` with
-`LatentVariability.realistic`.
+from the Swift simulator (`Sources/RavonCore/Dispatch/MarketplaceSimulator.swift` as of
+38f29c9, since ported to Kotlin and deleted) with `LatentVariability.realistic`.
 
 The export config is pinned to **240 orders / 180 minutes / 24 couriers, dispatched by
 `OptimalBatchDispatcher`**, because that is the configuration that produced the
@@ -122,11 +122,14 @@ measured rather than assumed — `restaurant_index` carries no transferable sign
 the simulator's `*_at_creation` congestion columns are recorded at *assignment*. Both
 are in [FINDINGS.md](FINDINGS.md).
 
-To regenerate (requires Swift, and nothing downstream does):
+To regenerate (requires Swift and full git history, and nothing downstream does):
 
 ```bash
 ./ml/export/export.sh
 ```
+
+The script compiles the simulator out of git at 38f29c9, so it still works now that the
+Swift copy is gone; its output is byte-identical to the committed files.
 
 ## Reproducibility
 

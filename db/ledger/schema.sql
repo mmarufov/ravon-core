@@ -49,10 +49,10 @@ END$$;
 
 -- ============================================================================
 -- Structured errors — the repo's existing RPC convention (see
--- .context/migrations/13_*.sql): RAISE with ERRCODE 'P0001' and a jsonb DETAIL
--- carrying a machine-readable `reason`. The service decodes `reason` and maps
--- `http_status` straight through. Every reason code is listed in
--- db/ledger/HANDOFF-for-kotlin.md.
+-- db/migrations/13_courier_status_transition_rpcs_v2.sql): RAISE with ERRCODE
+-- 'P0001' and a jsonb DETAIL carrying a machine-readable `reason`. The service
+-- decodes `reason` and maps `http_status` straight through. Every reason code is
+-- listed in db/ledger/HANDOFF-for-kotlin.md.
 -- ============================================================================
 CREATE OR REPLACE FUNCTION ledger_raise(
   p_reason      text,

@@ -2,8 +2,6 @@ package dev.ravon.dispatch
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
-import java.nio.file.Files
-import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -33,7 +31,7 @@ class SwiftRandomGoldenVectorTest {
     )
 
     private val vectors: Vectors = jacksonObjectMapper()
-        .readValue(Files.readString(Fixtures.path("dispatch-rng-golden-vectors.json")))
+        .readValue(Fixtures.read("dispatch-rng-golden-vectors.json"))
 
     private val n get() = vectors.rawNext.size
 
@@ -172,16 +170,13 @@ class SwiftRandomGoldenVectorTest {
     }
 }
 
-/** Locates the fixtures, which live with the Swift tests and are shared by both ports. */
+/**
+ * Reads a fixture from `src/test/resources`. Both fixtures were recorded from the Swift
+ * engine (`Sources/RavonCore/Dispatch/` as of 38f29c9) before it was deleted, and are
+ * read only by this module.
+ */
 object Fixtures {
-    fun path(name: String): Path {
-        // Tests run with the Gradle project (`services/`) as the working directory.
-        val candidates = listOf(
-            Path.of("../Tests/RavonCoreTests/Fixtures", name),
-            Path.of("../../Tests/RavonCoreTests/Fixtures", name),
-            Path.of("Tests/RavonCoreTests/Fixtures", name),
-        )
-        return candidates.firstOrNull { Files.exists(it) }
-            ?: error("fixture $name not found; looked in ${candidates.joinToString()} from ${Path.of("").toAbsolutePath()}")
-    }
+    fun read(name: String): String =
+        Fixtures::class.java.getResourceAsStream("/$name")?.use { it.readBytes().decodeToString() }
+            ?: error("fixture $name not found on the test classpath (src/test/resources)")
 }

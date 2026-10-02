@@ -317,12 +317,13 @@ and execution environments.
 | [`db/temporal_payout/`](db/temporal_payout/) | Payout workers, Temporal workflows, and fault injection |
 | [`db/rush/`](db/rush/) | Concurrent-checkout experiments |
 | [`ml/`](ml/) | Offline ETA and anomaly-detection evaluation |
-| [`docs/adr/`](docs/adr/) | Architecture decision records |
+| [`docs/`](docs/README.md) | Architecture decisions, studies, run records, and research notes |
 | [`scripts/`](scripts/) | Compatibility, report, and credential checks |
 
 ---
 
-Built by [Muhammadjon Marufov](https://github.com/mmarufov).
+Built by [Muhammadjon Marufov](https://github.com/mmarufov). Released under the
+[MIT License](LICENSE).
 
 <div align="center">
 <br />

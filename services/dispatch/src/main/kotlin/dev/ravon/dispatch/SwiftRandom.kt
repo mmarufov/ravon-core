@@ -10,7 +10,7 @@ package dev.ravon.dispatch
  * baseline at all — is Swift's *mapping* from 64 raw bits into a range. It is not a
  * modulo, it is not uniform-by-luck, and the closed-range and half-open-range forms
  * differ. Both were reverse-engineered against
- * `Tests/RavonCoreTests/Fixtures/dispatch-rng-golden-vectors.json` and the findings are:
+ * `src/test/resources/dispatch-rng-golden-vectors.json` and the findings are:
  *
  *  - `next(upperBound:)` takes a **power-of-two fast path** that masks the low bits,
  *    and otherwise uses **Lemire's "nearly divisionless" method** returning the high
