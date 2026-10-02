@@ -49,8 +49,8 @@ three apps share.
   `ObservableObject` view model plus the views it drives, for example
   `AuthFlowViewModel` and `RavonAuthFlow`. View models take their services through
   `init`, defaulting to `.shared`.
-- Apps call `RavonCore.configure(supabaseURL:supabaseAnonKey:)` once at launch, before
-  any service is used.
+- Apps call `RavonCore.configure(supabaseURL:supabaseAnonKey:)` (in `RavonCore.swift`)
+  once at launch, before any service is used.
 
 Rules:
 
