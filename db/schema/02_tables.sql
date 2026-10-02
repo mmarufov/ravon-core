@@ -3,7 +3,8 @@
 -- Sources unioned per table, in the order they were trusted:
 --   M  db/migrations/*.sql      — ALTER/reference evidence (1 CREATE TABLE only)
 --   S  Sources/RavonCore/Models — 265 wire keys across 14 CodingKeys blocks
---   C  SupabaseService.swift    — projections, filters, embeds, onConflict targets
+--   C  SupabaseService+*.swift  — projections, filters, embeds, onConflict targets
+--      (`C Menu:35` means SupabaseService+Menu.swift, line 35)
 --
 -- `order_item_modifiers` is deliberately absent: migration 02 folded it into
 -- `order_items.modifiers_snapshot` and the model has zero call sites. The Swift
@@ -46,7 +47,7 @@ CREATE TABLE IF NOT EXISTS public.restaurants (
   -- S-only, and hard-decoded (Restaurant.swift:69): absence or NULL throws and
   -- the whole consumer feed fails. NOT NULL with a default rather than nullable.
   cuisine_type           text NOT NULL DEFAULT '',
-  -- S-only, hard-decoded, and `.order("rating")` sorts on it (C :179).
+  -- S-only, hard-decoded, and `.order("rating")` sorts on it (C Restaurants:15).
   rating                 double precision NOT NULL DEFAULT 0
                            CHECK (rating >= 0 AND rating <= 5),
   -- D4: M proves nullable (`COALESCE(r.delivery_time_min, 30)` at 06:100) but S
@@ -66,7 +67,7 @@ CREATE TABLE IF NOT EXISTS public.restaurants (
   is_accepting_orders    boolean NOT NULL DEFAULT true,
   accepting_orders_until timestamptz,
   -- D6 / R9. Referenced by RLS at 01:43, 01:64, 05:22, 15:54, 15:70 and by
-  -- fetchMyRestaurant (C :1132), yet created by NO migration — three migrations
+  -- fetchMyRestaurant (C Restaurants:154), yet created by NO migration — three migrations
   -- referenced a column their own set never created. Declared NOT NULL here so
   -- that class of error is impossible, and so ownership is a foreign key rather
   -- than a policy clause.
@@ -76,7 +77,7 @@ CREATE TABLE IF NOT EXISTS public.restaurants (
   -- withholds UPDATE on this column so it cannot be reassigned either.
   owner_id               uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   -- DEFAULT 'draft', not 'active'. RestaurantInsert sends no status, and
-  -- activateRestaurant (C :1147-1151) filters `.eq("restaurant_status","draft")`
+  -- activateRestaurant (C Restaurants:169-173) filters `.eq("restaurant_status","draft")`
   -- — so an 'active' default would make that call match zero rows and the
   -- merchant could never complete onboarding. The onboarding flow only makes
   -- sense if a new restaurant is invisible to the consumer feed until it opts in.
@@ -86,8 +87,8 @@ CREATE TABLE IF NOT EXISTS public.restaurants (
   updated_at             timestamptz NOT NULL DEFAULT now()
 );
 -- UNIQUE, not a plain index. createRestaurant's doc comment claims "1 per
--- merchant enforced by DB unique index" (SupabaseService.swift:1107) and its
--- only actual enforcement is a client-side pre-check (:1113) that two
+-- merchant enforced by DB unique index" (C Restaurants:130) and its only
+-- actual enforcement is a client-side pre-check (:135) that two
 -- concurrent calls both pass. Another contract written in a comment and
 -- enforced nowhere.
 CREATE UNIQUE INDEX IF NOT EXISTS restaurants_owner_uniq ON public.restaurants(owner_id);
@@ -104,7 +105,7 @@ CREATE TABLE IF NOT EXISTS public.restaurant_hours (
   closing_time  time NOT NULL,
   is_closed     boolean NOT NULL DEFAULT false,
   -- Composite UNIQUE asserted by exactly one source: `onConflict:
-  -- "restaurant_id,day_of_week"` at C :896. Without it that upsert errors.
+  -- "restaurant_id,day_of_week"` at C Restaurants:70. Without it that upsert errors.
   CONSTRAINT restaurant_hours_day_uniq UNIQUE (restaurant_id, day_of_week)
 );
 
@@ -146,7 +147,7 @@ CREATE INDEX IF NOT EXISTS menu_items_category_idx ON public.menu_items(category
 -- ===========================================================================
 -- modifiers — three tables with ZERO SQL evidence anywhere in the corpus.
 -- They exist only because Swift decodes them and SupabaseService embeds them
--- (C :910-930). Shapes are therefore S-only; every column here is a decision,
+-- (C Menu:35-55). Shapes are therefore S-only; every column here is a decision,
 -- not a recovery.
 -- ===========================================================================
 CREATE TABLE IF NOT EXISTS public.modifier_groups (
@@ -193,7 +194,7 @@ CREATE TABLE IF NOT EXISTS public.addresses (
   city                  text NOT NULL,
   latitude              double precision,
   longitude             double precision,
-  is_default            boolean NOT NULL DEFAULT false,   -- `.order("is_default")` at C :252
+  is_default            boolean NOT NULL DEFAULT false,   -- `.order("is_default")` at C Addresses:10
   default_delivery_mode text NOT NULL DEFAULT 'hand_to_me' -- M 10:17
                           CHECK (default_delivery_mode IN ('hand_to_me','leave_at_door')),
   created_at            timestamptz NOT NULL DEFAULT now()
@@ -351,7 +352,7 @@ CREATE INDEX IF NOT EXISTS order_items_order_idx ON public.order_items(order_id)
 
 -- ===========================================================================
 -- order_status_history — one table, zero SQL evidence in the corpus. It exists
--- because Swift decodes it (C :293) and because the state machine needs an audit
+-- because Swift decodes it (C Orders:25) and because the state machine needs an audit
 -- trail. Appended by trigger only (09_triggers.sql), never by a client: clients
 -- hold no INSERT grant, so the trail cannot be forged or back-dated.
 -- ===========================================================================
@@ -371,7 +372,7 @@ CREATE INDEX IF NOT EXISTS order_status_history_order_idx
 -- ===========================================================================
 CREATE TABLE IF NOT EXISTS public.courier_locations (
   -- PK is courier_id, not a surrogate id: asserted by `onConflict: "courier_id"`
-  -- at C :688 and :731, and CourierLocation's CodingKeys has no `id` (its
+  -- at C Courier:206 and :249, and CourierLocation's CodingKeys has no `id` (its
   -- Identifiable `id` is a computed alias for courierId).
   courier_id        uuid PRIMARY KEY REFERENCES public.profiles(id) ON DELETE CASCADE,
   latitude          double precision NOT NULL,
@@ -396,7 +397,7 @@ CREATE INDEX IF NOT EXISTS courier_locations_online_idx
 -- ===========================================================================
 -- courier_earnings
 --
--- Retained because the courier app reads it (C :844-871). NOT wired to
+-- Retained because the courier app reads it (C Courier:362-389). NOT wired to
 -- db/ledger/: that schema is verified, owned by another session, and
 -- HANDOFF-for-kotlin.md is explicit that the only write path is ledger_post().
 -- Superseding this table with ledger postings is a later, deliberate migration.
@@ -440,7 +441,7 @@ CREATE TABLE IF NOT EXISTS public.chat_messages (
   sender_role text,                                               -- M 15:12
   body        text NOT NULL,
   -- N5/R14: R14 moves read receipts to their own table so `body` cannot be
-  -- rewritten. That would break markMessagesAsRead (C :1084) which PATCHes
+  -- rewritten. That would break markMessagesAsRead (C Chat:36) which PATCHes
   -- read_at on this row. The column stays, and immutability of `body` is
   -- achieved instead by a column-level `GRANT UPDATE (read_at)` in
   -- 11_grants.sql — the exact primitive RLS lacks. Same guarantee, no client

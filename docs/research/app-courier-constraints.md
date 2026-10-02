@@ -1,5 +1,7 @@
 # ravon-courier → constraints on a Kotlin backend extraction
 
+> Line citations into `SupabaseService.swift` point at it [as of c08f918](https://github.com/mmarufov/ravon-core/blob/c08f918/Sources/RavonCore/Services/SupabaseService.swift), before it was split by domain into `SupabaseService+<Domain>.swift`.
+
 Source read in full: `/Users/mmarufov/conductor/workspaces/ravon-courier/buffalo/.context/STATE-REPORT.md`
 (38,828 bytes) plus `/Users/mmarufov/conductor/workspaces/ravon-courier/buffalo/CLAUDE.md`.
 

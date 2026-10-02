@@ -41,7 +41,9 @@ three apps share.
   `OrderLifecycle`, `CartValidation` and `RestaurantHours`. No networking.
 - `Services/`: `@MainActor` singletons with `.shared`. `AuthService` owns the
   `SupabaseClient`, and the other services reach it through
-  `AuthService.shared.supabaseClient`.
+  `AuthService.shared.supabaseClient`. `SupabaseService` holds the database queries
+  and RPCs, one extension per domain in `SupabaseService+<Domain>.swift`; a new
+  method goes in the file for its domain. Its errors are `ServiceError`.
 - `UI/`: `Theme.swift` (brand colours, `CardStyle`, `PressableButtonStyle`,
   `RavonPrimaryButton`, `RavonTextField`) and shared flows. A flow is one
   `ObservableObject` view model plus the views it drives, for example

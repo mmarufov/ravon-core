@@ -176,7 +176,7 @@ CREATE POLICY restaurants_select ON public.restaurants
     OR owner_id = auth.uid()
     -- A consumer with a past order at a since-paused restaurant must still be
     -- able to render that order: fetchOrders embeds `restaurants(*)`
-    -- (SupabaseService.swift:277) and an invisible restaurant makes the embed
+    -- (SupabaseService+Orders.swift:9) and an invisible restaurant makes the embed
     -- NULL, which Order decodes as no restaurant and the order card renders blank.
     OR public.ravon_has_order_at_restaurant(id)
   );
@@ -277,10 +277,10 @@ CREATE POLICY mimg_write_own ON public.menu_item_modifier_groups
            (SELECT restaurant_id FROM public.menu_items WHERE id = menu_item_modifier_groups.menu_item_id)));
 
 -- ===========================================================================
--- addresses — strictly own. Note fetchAddresses (SupabaseService.swift:250) and
--- markMessagesAsRead (:1084) both issue queries with NO ownership predicate at
--- all; they were relying entirely on a policy nobody wrote down. These are
--- those policies.
+-- addresses — strictly own. Note fetchAddresses (SupabaseService+Addresses.swift:8)
+-- and markMessagesAsRead (SupabaseService+Chat.swift:36) both issue queries with
+-- NO ownership predicate at all; they were relying entirely on a policy nobody
+-- wrote down. These are those policies.
 -- ===========================================================================
 DROP POLICY IF EXISTS addresses_own ON public.addresses;
 CREATE POLICY addresses_own ON public.addresses
@@ -303,7 +303,7 @@ CREATE POLICY orders_select_participant ON public.orders
 -- Consequence worth stating: an UNASSIGNED order is visible to no courier
 -- through this table. The offer feed therefore MUST go through
 -- fetch_available_orders(), which returns a safe projection. The legacy direct
--- query at SupabaseService.swift:773 — `.from("orders").select("*, restaurants(*)")`
+-- query at SupabaseService+Courier.swift:291 — `.from("orders").select("*, restaurants(*)")`
 -- filtered on a null courier — now correctly returns zero rows instead of
 -- handing every courier both verification codes and the consumer's address.
 

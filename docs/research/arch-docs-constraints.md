@@ -1,5 +1,7 @@
 # Architecture-docs constraint extraction
 
+> Line citations into `SupabaseService.swift` point at it [as of c08f918](https://github.com/mmarufov/ravon-core/blob/c08f918/Sources/RavonCore/Services/SupabaseService.swift), before it was split by domain into `SupabaseService+<Domain>.swift`.
+
 Research note, 2026-09-16. Read-only audit of the architecture docs against the repo.
 
 Docs read in full:

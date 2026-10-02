@@ -6,7 +6,7 @@
 --     merchant_mark_order_ready, merchant_cancel_order
 --
 -- Before this file, four of the five merchant operations were direct table
--- UPDATEs from the client (SupabaseService.swift:393-447) riding on an `orders`
+-- UPDATEs from the client (SupabaseService+Orders.swift:125-179) riding on an `orders`
 -- UPDATE policy that constrained which ROWS but not which COLUMNS — the defect
 -- behind S4, S5, T1 and T2, and one that no policy rewrite can fix because
 -- Postgres RLS has no column dimension. The fifth, merchant cancel, had no

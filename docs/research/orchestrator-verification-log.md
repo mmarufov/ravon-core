@@ -1,5 +1,7 @@
 # Orchestrator verification log — claims in PROMPT-kotlin-backend.md checked first-hand
 
+> Line citations into `SupabaseService.swift` point at it [as of c08f918](https://github.com/mmarufov/ravon-core/blob/c08f918/Sources/RavonCore/Services/SupabaseService.swift), before it was split by domain into `SupabaseService+<Domain>.swift`.
+
 Session 2026-09-16. Every line below was verified by the orchestrator directly, not delegated.
 
 ## CONFIRMED

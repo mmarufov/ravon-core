@@ -121,8 +121,8 @@ GRANT INSERT, UPDATE, DELETE ON public.menu_item_modifier_groups TO authenticate
 GRANT INSERT, UPDATE, DELETE ON public.addresses                 TO authenticated;
 
 -- courier_locations: the courier app upserts its own row directly
--- (SupabaseService.swift:688, :731) and PATCHes is_online / current_order_id
--- (:741, :830), so the grant has to exist. Columns are enumerated so a courier
+-- (SupabaseService+Courier.swift:206, :249) and PATCHes is_online /
+-- current_order_id (:259, :348), so the grant has to exist. Columns are enumerated so a courier
 -- cannot write ghost_strikes or strikes_reset_at — the fields the escalation
 -- ladder uses to decide whether to suspend them.
 GRANT INSERT ON public.courier_locations TO authenticated;
@@ -136,7 +136,8 @@ GRANT UPDATE (latitude, longitude, heading, speed, accuracy_meters,
 -- auth.uid()` plus order participation, and RLS has no column dimension — so a
 -- courier could rewrite the consumer's message `body`, which is the dispute
 -- evidence, or forge `sender_role`. A column-level grant is the primitive RLS
--- lacks, and it keeps markMessagesAsRead (:1084) working unchanged.
+-- lacks, and it keeps markMessagesAsRead (SupabaseService+Chat.swift:36)
+-- working unchanged.
 GRANT INSERT ON public.chat_messages TO authenticated;
 GRANT UPDATE (read_at) ON public.chat_messages TO authenticated;
 
@@ -147,8 +148,8 @@ GRANT UPDATE (read_at) ON public.chat_messages TO authenticated;
 --                            Every transition is a SECURITY DEFINER RPC; there
 --                            is no second path. The four merchant operations
 --                            that used to PATCH this table directly
---                            (SupabaseService.swift:393-447) are now
---                            06_merchant_rpcs.sql, and `assignCourier` (:641)
+--                            (SupabaseService+Orders.swift:125-179) are now
+--                            06_merchant_rpcs.sql, and `assignCourier` (:192)
 --                            is gone entirely — it set an arbitrary courier_id
 --                            and worked only for the actor whose policy had no
 --                            ownership check.

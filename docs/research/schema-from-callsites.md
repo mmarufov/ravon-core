@@ -1,5 +1,7 @@
 # Postgres schema reconstructed from the Swift call sites
 
+> Line citations into `SupabaseService.swift` point at it [as of c08f918](https://github.com/mmarufov/ravon-core/blob/c08f918/Sources/RavonCore/Services/SupabaseService.swift), before it was split by domain into `SupabaseService+<Domain>.swift`.
+
 **Method.** This document is derived *only* from what the Swift code sends to and decodes
 from PostgREST/Realtime. It is an independent third source: it does not read the
 migrations to establish facts. Where I did open `db/migrations/*.sql`, it is marked
