@@ -40,6 +40,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import psycopg
+from psycopg import sql
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "ledger" / "tests"))
@@ -168,6 +169,7 @@ class Seeder:
         self.rpc_conn = psycopg.connect(dsn, autocommit=True)
         self.ledger = Ledger(psycopg.connect(dsn))
         self.admin = psycopg.connect(dsn, autocommit=True)
+        self.order_seq = 0
         self.chart = {
             "clearing": self.ledger.open_account("psp_clearing", None, CUR, allow_negative=True),
             "revenue": self.ledger.open_account("platform_revenue", None, CUR, allow_negative=True),
@@ -255,8 +257,16 @@ class Seeder:
     def walk_order(self, act: Actors, note: str | None, reassign_reason: str | None) -> Order:
         lines = [{"menu_item_id": str(item), "quantity": self.rng.randint(1, 2)}
                  for item, _ in self.rng.sample(act.items, self.rng.randint(1, 3))]
+        # create_order takes its id from the column default. Pinning the default
+        # to a derived uuid for this one call makes order ids, and the questions
+        # that name them, the same on every reseed. run() restores the default.
+        want = uid(act.merchant, "order", self.order_seq)
+        self.order_seq += 1
+        self.admin.execute(sql.SQL("ALTER TABLE public.orders ALTER COLUMN id SET DEFAULT {}::uuid")
+                           .format(sql.Literal(str(want))))
         oid = self.rpc(act.consumer, "SELECT public.create_order(%s, %s, %s::jsonb, %s)",
                        (act.restaurant, act.address, json.dumps(lines), note))
+        assert oid == want, (oid, want)
         self.rpc(act.merchant, "SELECT public.merchant_accept_order(%s, 20)", (oid,))
         self.rpc(act.merchant, "SELECT public.merchant_start_preparing(%s)", (oid,))
         self.rpc(act.merchant, "SELECT public.merchant_mark_order_ready(%s)", (oid,))
@@ -411,7 +421,10 @@ class Seeder:
 
     def run(self) -> list[Case]:
         plan = [(cause, i) for i in range(self.per_cause) for cause in CAUSES]
-        return [self.case(cause, i, n) for n, (cause, i) in enumerate(plan, start=1)]
+        try:
+            return [self.case(cause, i, n) for n, (cause, i) in enumerate(plan, start=1)]
+        finally:
+            self.admin.execute("ALTER TABLE public.orders ALTER COLUMN id SET DEFAULT gen_random_uuid()")
 
 
 LEDGER_DIGEST_SQL = """
@@ -426,13 +439,16 @@ SELECT md5(string_agg(
 FROM public.ledger_entries e
 JOIN public.ledger_accounts a ON a.id = e.account_id
 JOIN public.ledger_transactions t ON t.id = e.transaction_id
+WHERE t.idempotency_key NOT LIKE 'assist:%%'
 """
 
 
 def ledger_digest(conn: psycopg.Connection) -> str:
     """A fingerprint of every entry's id, account kind, owning merchant,
-    direction, amount and event type. Order ids and timestamps are random per
-    run and left out; everything the grader checks is in. grade.ts refuses to
+    direction, amount and event type. Timestamps are left out; everything the
+    grader checks is in. Postings made by
+    approving a proposal (assist:...) are left out too, so approving in a test
+    does not change the digest. apps/merchant-assist/grade.ts has the same query. grade.ts refuses to
     grade a transcript against a database whose digest differs."""
     with conn.cursor() as cur:
         cur.execute(LEDGER_DIGEST_SQL)

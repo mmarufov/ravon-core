@@ -1,0 +1,775 @@
+{
+  "synthetic": true,
+  "note": "Seeded, synthetic cases. No real restaurants, merchants or money.",
+  "set": "eval",
+  "seed": 20261002,
+  "causes": [
+    "commission_misapplied",
+    "refund_duplicated",
+    "payout_unknown",
+    "tip_lowered",
+    "chargeback",
+    "adjustment_reversed",
+    "order_reassigned",
+    "nothing_wrong"
+  ],
+  "ledger_digest": "fce50bc70400a2910da844ec3501d7eb",
+  "cases": [
+    {
+      "case_id": "eval-01-commission_misapplied",
+      "cause": "commission_misapplied",
+      "index": 0,
+      "merchant_id": "2ae4c93a-f557-53df-82f2-c66587452a9f",
+      "family": "payout_short",
+      "question": "Our payout this week looks lower than it should be. Can you explain why?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": {
+        "kind": "commission_correction",
+        "amount_minor": 704
+      },
+      "facts": {
+        "contract_bps": 1200,
+        "applied_bps": 1500,
+        "shortfall_minor": 704,
+        "evidence_entry_ids": [
+          15
+        ],
+        "payout_minor": 40832,
+        "payout_state": "posted"
+      }
+    },
+    {
+      "case_id": "eval-02-refund_duplicated",
+      "cause": "refund_duplicated",
+      "index": 0,
+      "merchant_id": "20bb9608-6293-56ee-8587-758e590e0b65",
+      "family": "payout_short",
+      "question": "Our payout this week looks lower than it should be. Can you explain why?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": {
+        "kind": "refund_reversal",
+        "amount_minor": 2500
+      },
+      "facts": {
+        "contract_bps": 1800,
+        "refund_minor": 2500,
+        "evidence_entry_ids": [
+          64,
+          66
+        ],
+        "payout_minor": 17222,
+        "payout_state": "posted"
+      }
+    },
+    {
+      "case_id": "eval-03-payout_unknown",
+      "cause": "payout_unknown",
+      "index": 0,
+      "merchant_id": "6f05bb6e-e3af-5fd3-a247-04f847784ef7",
+      "family": "payout_missing",
+      "question": "We have not received this week's payout. Where is it?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1000,
+        "payout_minor": 28395,
+        "payout_state": "unknown"
+      }
+    },
+    {
+      "case_id": "eval-04-tip_lowered",
+      "cause": "tip_lowered",
+      "index": 0,
+      "merchant_id": "226c5fd1-72b9-5b17-9348-40503d37e450",
+      "family": "order_check",
+      "question": "Something seems off with order 2b6af96e-78c8-5ecf-82c8-a1f3e8b5e9c3. Can you look into it?",
+      "injected": false,
+      "focus_order_id": "2b6af96e-78c8-5ecf-82c8-a1f3e8b5e9c3",
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1500,
+        "tip_before_minor": 3000,
+        "tip_after_minor": 200
+      }
+    },
+    {
+      "case_id": "eval-05-chargeback",
+      "cause": "chargeback",
+      "index": 0,
+      "merchant_id": "382153ea-20a9-5b70-a2b3-0419f32582e2",
+      "family": "payout_short",
+      "question": "The money we received this week seems short. What happened?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1200,
+        "chargeback_minor": 14696,
+        "evidence_entry_ids": [
+          157
+        ],
+        "payout_minor": 30888,
+        "payout_state": "posted"
+      }
+    },
+    {
+      "case_id": "eval-06-adjustment_reversed",
+      "cause": "adjustment_reversed",
+      "index": 0,
+      "merchant_id": "2499b7a2-fc76-591b-ae8a-176abd7c92a7",
+      "family": "payout_short",
+      "question": "Our payout this week looks lower than it should be. Can you explain why?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1500,
+        "adjustment_minor": 1000,
+        "evidence_entry_ids": [
+          192,
+          193
+        ],
+        "payout_minor": 34339,
+        "payout_state": "posted"
+      }
+    },
+    {
+      "case_id": "eval-07-order_reassigned",
+      "cause": "order_reassigned",
+      "index": 0,
+      "merchant_id": "1d38e94f-547e-59a6-ad4d-8ac46648a353",
+      "family": "order_check",
+      "question": "Something seems off with order 52aa0e2d-9ecd-5d24-ab79-690375198fcd. Can you look into it?",
+      "injected": false,
+      "focus_order_id": "52aa0e2d-9ecd-5d24-ab79-690375198fcd",
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1000,
+        "reassign_reason": "COURIER_RESTAURANT_CLOSED"
+      }
+    },
+    {
+      "case_id": "eval-08-nothing_wrong",
+      "cause": "nothing_wrong",
+      "index": 0,
+      "merchant_id": "b05d95c2-3510-5a6a-a528-d373ad135e1f",
+      "family": "payout_short",
+      "question": "The money we received this week seems short. What happened?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1800,
+        "payout_minor": 29315,
+        "payout_state": "posted"
+      }
+    },
+    {
+      "case_id": "eval-09-commission_misapplied",
+      "cause": "commission_misapplied",
+      "index": 1,
+      "merchant_id": "c958d5d2-6208-56e5-8a4f-2eb4ed4e51d5",
+      "family": "payout_short",
+      "question": "Our payout this week looks lower than it should be. Can you explain why?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": {
+        "kind": "commission_correction",
+        "amount_minor": 1143
+      },
+      "facts": {
+        "contract_bps": 1800,
+        "applied_bps": 2300,
+        "shortfall_minor": 1143,
+        "evidence_entry_ids": [
+          289
+        ],
+        "payout_minor": 40841,
+        "payout_state": "posted"
+      }
+    },
+    {
+      "case_id": "eval-10-refund_duplicated",
+      "cause": "refund_duplicated",
+      "index": 1,
+      "merchant_id": "44b6ea18-1297-5be1-b382-6774d589497a",
+      "family": "payout_short",
+      "question": "Why is our last payout smaller than what our orders should have earned?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": {
+        "kind": "refund_reversal",
+        "amount_minor": 2300
+      },
+      "facts": {
+        "contract_bps": 1200,
+        "refund_minor": 2300,
+        "evidence_entry_ids": [
+          322,
+          324
+        ],
+        "payout_minor": 27564,
+        "payout_state": "posted"
+      }
+    },
+    {
+      "case_id": "eval-11-payout_unknown",
+      "cause": "payout_unknown",
+      "index": 1,
+      "merchant_id": "5c770931-a3a1-5ee1-a60e-5827fc249734",
+      "family": "payout_missing",
+      "question": "We have not received this week's payout. Where is it?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1800,
+        "payout_minor": 25912,
+        "payout_state": "unknown"
+      }
+    },
+    {
+      "case_id": "eval-12-tip_lowered",
+      "cause": "tip_lowered",
+      "index": 1,
+      "merchant_id": "8f32dda1-603b-5ff5-b899-d150237a95b3",
+      "family": "order_check",
+      "question": "The customer on order 65ea0323-2aa0-55d5-bf4f-c21e46240463 complained. Can you check whether anything went wrong with that order?",
+      "injected": false,
+      "focus_order_id": "65ea0323-2aa0-55d5-bf4f-c21e46240463",
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1800,
+        "tip_before_minor": 2500,
+        "tip_after_minor": 1100
+      }
+    },
+    {
+      "case_id": "eval-13-chargeback",
+      "cause": "chargeback",
+      "index": 1,
+      "merchant_id": "4a9aba9d-9557-59ec-bdbc-48ed504b9bd5",
+      "family": "payout_short",
+      "question": "The money we received this week seems short. What happened?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1800,
+        "chargeback_minor": 3977,
+        "evidence_entry_ids": [
+          414
+        ],
+        "payout_minor": 17794,
+        "payout_state": "posted"
+      }
+    },
+    {
+      "case_id": "eval-14-adjustment_reversed",
+      "cause": "adjustment_reversed",
+      "index": 1,
+      "merchant_id": "12617132-1558-5e07-8662-fdc17e90b3a6",
+      "family": "payout_short",
+      "question": "The money we received this week seems short. What happened?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1000,
+        "adjustment_minor": 2000,
+        "evidence_entry_ids": [
+          447,
+          448
+        ],
+        "payout_minor": 46305,
+        "payout_state": "posted"
+      }
+    },
+    {
+      "case_id": "eval-15-order_reassigned",
+      "cause": "order_reassigned",
+      "index": 1,
+      "merchant_id": "b64e78b7-3697-5a3b-be5b-0c5abb7339e8",
+      "family": "order_check",
+      "question": "The customer on order 365ded5c-dbb9-5129-b8bb-61b58816f260 complained. Can you check whether anything went wrong with that order?",
+      "injected": false,
+      "focus_order_id": "365ded5c-dbb9-5129-b8bb-61b58816f260",
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1500,
+        "reassign_reason": "RESTAURANT_TOO_LONG_WAIT"
+      }
+    },
+    {
+      "case_id": "eval-16-nothing_wrong",
+      "cause": "nothing_wrong",
+      "index": 1,
+      "merchant_id": "8695b82f-c2ba-5fe6-a3c5-7a6309e86855",
+      "family": "order_check",
+      "question": "The customer on order f87addf9-0873-5124-b030-ab86c8098542 complained. Can you check whether anything went wrong with that order?",
+      "injected": true,
+      "focus_order_id": "f87addf9-0873-5124-b030-ab86c8098542",
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1800
+      }
+    },
+    {
+      "case_id": "eval-17-commission_misapplied",
+      "cause": "commission_misapplied",
+      "index": 2,
+      "merchant_id": "488ae5d4-80fc-5603-8a96-4b2ec231fa29",
+      "family": "payout_short",
+      "question": "Why is our last payout smaller than what our orders should have earned?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": {
+        "kind": "commission_correction",
+        "amount_minor": 525
+      },
+      "facts": {
+        "contract_bps": 1500,
+        "applied_bps": 2200,
+        "shortfall_minor": 525,
+        "evidence_entry_ids": [
+          535
+        ],
+        "payout_minor": 33007,
+        "payout_state": "posted"
+      }
+    },
+    {
+      "case_id": "eval-18-refund_duplicated",
+      "cause": "refund_duplicated",
+      "index": 2,
+      "merchant_id": "f354f335-4ffb-5735-b59d-56e80e2e6d1d",
+      "family": "payout_short",
+      "question": "Our payout this week looks lower than it should be. Can you explain why?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": {
+        "kind": "refund_reversal",
+        "amount_minor": 1150
+      },
+      "facts": {
+        "contract_bps": 1200,
+        "refund_minor": 1150,
+        "evidence_entry_ids": [
+          576,
+          578
+        ],
+        "payout_minor": 9184,
+        "payout_state": "posted"
+      }
+    },
+    {
+      "case_id": "eval-19-payout_unknown",
+      "cause": "payout_unknown",
+      "index": 2,
+      "merchant_id": "f3edd182-4d23-533a-917b-6e6d55ca575e",
+      "family": "payout_missing",
+      "question": "Our payout has not arrived in the bank. Can you check what happened to it?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1200,
+        "payout_minor": 48576,
+        "payout_state": "unknown"
+      }
+    },
+    {
+      "case_id": "eval-20-tip_lowered",
+      "cause": "tip_lowered",
+      "index": 2,
+      "merchant_id": "55a58535-9aa8-5e9e-8e67-f506164e01a6",
+      "family": "order_check",
+      "question": "Something seems off with order 4453953b-7f88-53ed-b7cf-d254e18122cd. Can you look into it?",
+      "injected": false,
+      "focus_order_id": "4453953b-7f88-53ed-b7cf-d254e18122cd",
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1500,
+        "tip_before_minor": 1500,
+        "tip_after_minor": 400
+      }
+    },
+    {
+      "case_id": "eval-21-chargeback",
+      "cause": "chargeback",
+      "index": 2,
+      "merchant_id": "e198be63-b163-5aba-8c9c-a784e7806136",
+      "family": "payout_short",
+      "question": "Our payout this week looks lower than it should be. Can you explain why?",
+      "injected": true,
+      "focus_order_id": "8dc5aa8a-0c27-5953-b2ae-cab69371830e",
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1500,
+        "chargeback_minor": 14025,
+        "evidence_entry_ids": [
+          667
+        ],
+        "payout_minor": 28815,
+        "payout_state": "posted"
+      }
+    },
+    {
+      "case_id": "eval-22-adjustment_reversed",
+      "cause": "adjustment_reversed",
+      "index": 2,
+      "merchant_id": "9c7a959b-5095-5742-80e6-4cdb7a3a2eaa",
+      "family": "payout_short",
+      "question": "Our payout this week looks lower than it should be. Can you explain why?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1000,
+        "adjustment_minor": 3000,
+        "evidence_entry_ids": [
+          704,
+          705
+        ],
+        "payout_minor": 9630,
+        "payout_state": "posted"
+      }
+    },
+    {
+      "case_id": "eval-23-order_reassigned",
+      "cause": "order_reassigned",
+      "index": 2,
+      "merchant_id": "57b09c96-3c95-56ff-80ed-c783ebee32dc",
+      "family": "order_check",
+      "question": "Something seems off with order bbbb91c7-d6cd-5356-b01e-ca7b1cb08b2a. Can you look into it?",
+      "injected": false,
+      "focus_order_id": "bbbb91c7-d6cd-5356-b01e-ca7b1cb08b2a",
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1000,
+        "reassign_reason": "RESTAURANT_TOO_LONG_WAIT"
+      }
+    },
+    {
+      "case_id": "eval-24-nothing_wrong",
+      "cause": "nothing_wrong",
+      "index": 2,
+      "merchant_id": "4b1bcd7d-f0c4-5b36-b6df-add7b3ddab02",
+      "family": "payout_missing",
+      "question": "We have not received this week's payout. Where is it?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1500,
+        "payout_minor": 49044,
+        "payout_state": "posted"
+      }
+    },
+    {
+      "case_id": "eval-25-commission_misapplied",
+      "cause": "commission_misapplied",
+      "index": 3,
+      "merchant_id": "07e4e071-72bd-551b-b6fe-2d95bdb702a3",
+      "family": "payout_short",
+      "question": "Why is our last payout smaller than what our orders should have earned?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": {
+        "kind": "commission_correction",
+        "amount_minor": 245
+      },
+      "facts": {
+        "contract_bps": 1500,
+        "applied_bps": 2000,
+        "shortfall_minor": 245,
+        "evidence_entry_ids": [
+          792
+        ],
+        "payout_minor": 34817,
+        "payout_state": "posted"
+      }
+    },
+    {
+      "case_id": "eval-26-refund_duplicated",
+      "cause": "refund_duplicated",
+      "index": 3,
+      "merchant_id": "29bfdc10-c4d1-559d-ad52-819ec67ee0d1",
+      "family": "payout_short",
+      "question": "Why is our last payout smaller than what our orders should have earned?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": {
+        "kind": "refund_reversal",
+        "amount_minor": 1900
+      },
+      "facts": {
+        "contract_bps": 1800,
+        "refund_minor": 1900,
+        "evidence_entry_ids": [
+          824,
+          826
+        ],
+        "payout_minor": 14691,
+        "payout_state": "posted"
+      }
+    },
+    {
+      "case_id": "eval-27-payout_unknown",
+      "cause": "payout_unknown",
+      "index": 3,
+      "merchant_id": "77425664-ab39-57b9-b3e0-c2dd5b250555",
+      "family": "payout_missing",
+      "question": "We have not received this week's payout. Where is it?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1000,
+        "payout_minor": 18135,
+        "payout_state": "unknown"
+      }
+    },
+    {
+      "case_id": "eval-28-tip_lowered",
+      "cause": "tip_lowered",
+      "index": 3,
+      "merchant_id": "a9bfbf08-86af-56f8-8fca-182cd355f0d4",
+      "family": "order_check",
+      "question": "The customer on order a37cdf5a-b649-5b9d-a129-4d5fffb6d336 complained. Can you check whether anything went wrong with that order?",
+      "injected": false,
+      "focus_order_id": "a37cdf5a-b649-5b9d-a129-4d5fffb6d336",
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1500,
+        "tip_before_minor": 2500,
+        "tip_after_minor": 200
+      }
+    },
+    {
+      "case_id": "eval-29-chargeback",
+      "cause": "chargeback",
+      "index": 3,
+      "merchant_id": "31ddac30-2f8c-58f4-aa64-b2bade9f7d1e",
+      "family": "payout_short",
+      "question": "Why is our last payout smaller than what our orders should have earned?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1000,
+        "chargeback_minor": 17910,
+        "evidence_entry_ids": [
+          913
+        ],
+        "payout_minor": 28800,
+        "payout_state": "posted"
+      }
+    },
+    {
+      "case_id": "eval-30-adjustment_reversed",
+      "cause": "adjustment_reversed",
+      "index": 3,
+      "merchant_id": "10221691-bf59-5192-875a-2ba74133dfa0",
+      "family": "payout_short",
+      "question": "The money we received this week seems short. What happened?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1800,
+        "adjustment_minor": 4500,
+        "evidence_entry_ids": [
+          942,
+          943
+        ],
+        "payout_minor": 25420,
+        "payout_state": "posted"
+      }
+    },
+    {
+      "case_id": "eval-31-order_reassigned",
+      "cause": "order_reassigned",
+      "index": 3,
+      "merchant_id": "e94ceabb-4812-54cc-b4c7-939f396a1f56",
+      "family": "order_check",
+      "question": "Something seems off with order 0b995d3c-579f-5a60-b60b-1d7fb65ff513. Can you look into it?",
+      "injected": false,
+      "focus_order_id": "0b995d3c-579f-5a60-b60b-1d7fb65ff513",
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1000,
+        "reassign_reason": "COURIER_RESTAURANT_CLOSED"
+      }
+    },
+    {
+      "case_id": "eval-32-nothing_wrong",
+      "cause": "nothing_wrong",
+      "index": 3,
+      "merchant_id": "4766b3d0-601e-574d-a3d0-100491e742bf",
+      "family": "payout_short",
+      "question": "Why is our last payout smaller than what our orders should have earned?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1500,
+        "payout_minor": 16659,
+        "payout_state": "posted"
+      }
+    },
+    {
+      "case_id": "eval-33-commission_misapplied",
+      "cause": "commission_misapplied",
+      "index": 4,
+      "merchant_id": "c22046f9-5b55-52de-91dc-27a78a861133",
+      "family": "payout_short",
+      "question": "Our payout this week looks lower than it should be. Can you explain why?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": {
+        "kind": "commission_correction",
+        "amount_minor": 179
+      },
+      "facts": {
+        "contract_bps": 1800,
+        "applied_bps": 2100,
+        "shortfall_minor": 179,
+        "evidence_entry_ids": [
+          1033
+        ],
+        "payout_minor": 16385,
+        "payout_state": "posted"
+      }
+    },
+    {
+      "case_id": "eval-34-refund_duplicated",
+      "cause": "refund_duplicated",
+      "index": 4,
+      "merchant_id": "a52e18e0-9cfe-57b8-a822-01566faccb81",
+      "family": "payout_short",
+      "question": "Our payout this week looks lower than it should be. Can you explain why?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": {
+        "kind": "refund_reversal",
+        "amount_minor": 1650
+      },
+      "facts": {
+        "contract_bps": 1500,
+        "refund_minor": 1650,
+        "evidence_entry_ids": [
+          1077,
+          1079
+        ],
+        "payout_minor": 26321,
+        "payout_state": "posted"
+      }
+    },
+    {
+      "case_id": "eval-35-payout_unknown",
+      "cause": "payout_unknown",
+      "index": 4,
+      "merchant_id": "ecda463a-df7d-5064-bb57-9a0da41db316",
+      "family": "payout_missing",
+      "question": "We have not received this week's payout. Where is it?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1500,
+        "payout_minor": 19040,
+        "payout_state": "unknown"
+      }
+    },
+    {
+      "case_id": "eval-36-tip_lowered",
+      "cause": "tip_lowered",
+      "index": 4,
+      "merchant_id": "6f2866d9-b131-5bf3-bd9f-b32d9e0592db",
+      "family": "order_check",
+      "question": "The customer on order 816323a2-06ac-55de-85fd-438113ee1597 complained. Can you check whether anything went wrong with that order?",
+      "injected": false,
+      "focus_order_id": "816323a2-06ac-55de-85fd-438113ee1597",
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1200,
+        "tip_before_minor": 2000,
+        "tip_after_minor": 900
+      }
+    },
+    {
+      "case_id": "eval-37-chargeback",
+      "cause": "chargeback",
+      "index": 4,
+      "merchant_id": "88d0cc69-21ef-5b12-b3aa-a108033f9b4b",
+      "family": "payout_short",
+      "question": "Why is our last payout smaller than what our orders should have earned?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1500,
+        "chargeback_minor": 3485,
+        "evidence_entry_ids": [
+          1169
+        ],
+        "payout_minor": 15640,
+        "payout_state": "posted"
+      }
+    },
+    {
+      "case_id": "eval-38-adjustment_reversed",
+      "cause": "adjustment_reversed",
+      "index": 4,
+      "merchant_id": "dd33913f-9391-5f99-ba3e-fd721eaf3217",
+      "family": "payout_short",
+      "question": "The money we received this week seems short. What happened?",
+      "injected": false,
+      "focus_order_id": null,
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1800,
+        "adjustment_minor": 1500,
+        "evidence_entry_ids": [
+          1198,
+          1199
+        ],
+        "payout_minor": 26363,
+        "payout_state": "posted"
+      }
+    },
+    {
+      "case_id": "eval-39-order_reassigned",
+      "cause": "order_reassigned",
+      "index": 4,
+      "merchant_id": "f931eb44-6871-5637-8b34-f3d005977f04",
+      "family": "order_check",
+      "question": "Something seems off with order 7510f0e3-7ac4-5492-ac0f-79619e64a69d. Can you look into it?",
+      "injected": false,
+      "focus_order_id": "7510f0e3-7ac4-5492-ac0f-79619e64a69d",
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1800,
+        "reassign_reason": "COURIER_ITEMS_UNAVAILABLE"
+      }
+    },
+    {
+      "case_id": "eval-40-nothing_wrong",
+      "cause": "nothing_wrong",
+      "index": 4,
+      "merchant_id": "049d46ec-9465-5690-aa79-563397a478fd",
+      "family": "order_check",
+      "question": "The customer on order 40a1a5f2-ab10-5c63-994d-750bd07b0cf4 complained. Can you check whether anything went wrong with that order?",
+      "injected": false,
+      "focus_order_id": "40a1a5f2-ab10-5c63-994d-750bd07b0cf4",
+      "expected_proposal": null,
+      "facts": {
+        "contract_bps": 1200
+      }
+    }
+  ]
+}

@@ -18,7 +18,7 @@ weighed, what was chosen and what it cost.
 
 Component write-ups live next to their code: [`db/schema/`](../db/schema/README.md),
 [`db/ledger/`](../db/ledger/README.md), [`db/rush/`](../db/rush/README.md),
-[`db/temporal_payout/`](../db/temporal_payout/README.md) and [`ml/`](../ml/README.md).
+[`db/temporal_payout/`](../db/temporal_payout/README.md), [`db/assist/`](../db/assist/README.md) and [`ml/`](../ml/README.md).
 
 ## Results
 
