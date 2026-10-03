@@ -1,0 +1,23 @@
+{
+  "name": "merchant-assist",
+  "private": true,
+  "type": "module",
+  "description": "Ravon Assist: a merchant support agent whose amounts are re-summed from the ledger and whose actions wait for approval. Evaluated on seeded, synthetic cases only.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts",
+    "grade": "tsx grade.ts",
+    "run-cases": "tsx agent/run.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "pg": "^8.23.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

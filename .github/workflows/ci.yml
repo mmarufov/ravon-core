@@ -463,6 +463,97 @@ jobs:
             --dsn postgresql://postgres:ravon@127.0.0.1:5435/ravon_rush \
             --target strategies,rpc --k 200 --runs 3 --gate
 
+  merchant-assist:
+    name: Merchant Assist (PostgreSQL 17, no API key)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ravon
+        ports:
+          - 5436:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGPASSWORD: ravon
+      ASSIST_DSN: postgresql://postgres:ravon@127.0.0.1:5436/postgres
+      ASSIST_ADMIN_DSN: postgresql://postgres:ravon@127.0.0.1:5436/ravon_assist
+      ASSIST_AGENT_DSN: postgresql://assist_agent:assist_agent_pw@127.0.0.1:5436/ravon_assist
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: db/assist/tests/requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/merchant-assist/package-lock.json
+
+      - name: Install
+        run: |
+          python -m pip install -r db/assist/tests/requirements.txt
+          npm ci --prefix apps/merchant-assist
+
+      # db/schema, then the ledger, then the assist layer, in one database: the
+      # order a deployment would use.
+      - name: Apply schema, ledger and assist
+        run: |
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5436 -U postgres -d postgres -c 'CREATE DATABASE ravon_assist'
+          ./db/schema/apply.sh -h 127.0.0.1 -p 5436 -U postgres -d ravon_assist --local
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5436 -U postgres -d ravon_assist -f db/ledger/schema.sql
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5436 -U postgres -d ravon_assist -f db/assist/01_assist.sql
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5436 -U postgres -d ravon_assist \
+            -c "ALTER ROLE assist_agent LOGIN PASSWORD 'assist_agent_pw'"
+
+      # The committed case file must be exactly what the seeder produces, or the
+      # committed transcripts were graded against cases nobody can rebuild.
+      - name: Seed the 40 synthetic cases and compare with the committed file
+        run: |
+          python db/assist/seed.py --dsn "$ASSIST_ADMIN_DSN" --set eval --out /tmp/cases.eval.json
+          cmp /tmp/cases.eval.json db/assist/cases.eval.json
+
+      # Privileges, scoping for all 40 merchants, and 50 concurrent approvals of
+      # one proposal, each with its negative control. Uses its own database.
+      - name: Privileges, scope and the approval race
+        working-directory: db/assist
+        run: python -m pytest -p no:cacheprovider -rA
+
+      # The checker's mutation controls (an amount off by one, a phantom entry,
+      # another merchant's entry, a tool that calls ledger_post) and the agent
+      # loop driven by a scripted model. No API key.
+      - name: Checker mutation controls and agent loop
+        working-directory: apps/merchant-assist
+        run: |
+          npm run typecheck
+          npm test
+
+      # Re-grade every committed transcript against the reseeded ledger. Fails if
+      # any displayed answer has an ungrounded amount, any cross-merchant
+      # citation exists, or any assist: posting lacks an approved proposal.
+      - name: Grade committed transcripts
+        working-directory: apps/merchant-assist
+        run: |
+          shopt -s nullglob
+          files=(results/*.jsonl)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::notice::No committed transcripts yet."
+            exit 0
+          fi
+          for f in "${files[@]}"; do
+            set_name=$(head -1 "$f" | python3 -c 'import json,sys; print(json.load(sys.stdin)["set"])')
+            if [ "$set_name" != "eval" ]; then echo "skip $f (set $set_name)"; continue; fi
+            npx tsx grade.ts "$f" --dsn "$ASSIST_ADMIN_DSN" --check
+          done
+
   secret-scan:
     name: Secret scan
     runs-on: ubuntu-latest

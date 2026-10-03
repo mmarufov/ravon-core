@@ -16,6 +16,7 @@ overview. This file is the rules.
 | `db/ledger/` | Double-entry ledger and its invariant, idempotency and crash tests | [`db/ledger/README.md`](db/ledger/README.md#run-it) |
 | `db/temporal_payout/` | Payout saga, hand-built worker vs Temporal, and the lost-reply experiment | [`db/temporal_payout/README.md`](db/temporal_payout/README.md) |
 | `db/rush/` | Concurrent-checkout load harness | [`db/rush/README.md`](db/rush/README.md#run-it) |
+| `db/assist/`, `apps/merchant-assist/` | Ravon Assist: RLS-scoped support agent views, approval-gated ledger actions, seeded cases, and the TypeScript agent and checker | [`db/assist/README.md`](db/assist/README.md#run-it) |
 | `db/migrations/` | Historical migrations of the deleted Supabase project. Read-only | not applied anywhere |
 | `ml/` | Offline probabilistic ETA and anomaly detection (Python) | `cd ml && python -m pytest` |
 | `scripts/` | CI gates: schema drift, lifecycle parity, ML report drift, secret scan, markdown links | standard-library Python 3 |

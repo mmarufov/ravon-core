@@ -37,3 +37,6 @@ Config.local.xcconfig
 GoogleService-Info.plist
 service_role*
 *service_role*
+
+# Node
+node_modules/
